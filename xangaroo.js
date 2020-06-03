@@ -2,28 +2,30 @@
 // global variables
 // ***********************************************
 
-var DEBUG = false; // display debug info
+var DEBUG = true; // display debug info
 
 var WORLD_WIDTH = 600;
-var WORLD_HEIGHT = WORLD_WIDTH/16*9;
+var WORLD_HEIGHT = (WORLD_WIDTH / 16) * 9;
 var LEFT_MARGIN = 50;
 var FOOTER_HEIGHT = 100;
 var CANVAS_WIDTH = LEFT_MARGIN + WORLD_WIDTH;
 var CANVAS_HEIGHT = WORLD_HEIGHT + FOOTER_HEIGHT;
 
-var SPEED_START = 30; // initial speed, in pixels/second
-var ENERGY_START = 50; // energy = height in pixels of the jump
-var ENERGY_SMALLEST_JUMP = 50; // smallest jump = the jump by default
-var ENERGY_GAIN_ON_LANDING = 50; // energy gain when landing
-var ENERGY_EXTRA_GAIN_ON_LANDING = 20; // extra energy gain on landing while energy < some threshold
-var ENERGY_MAX_FOR_EXTRA_GAIN_ON_LANDING = 150;
-var ACCEPTANCE_DELAY_BEFORE_LANDING = 50; // milliseconds, delay to accept user jump request before landing
-var ACCEPTANCE_DELAY_AFTER_LANDING = 50; // milliseconds, delay between landing and rebounce, to allow user to fire the jump
+var SPEED_START = 60; // initial speed, in pixels/second
+var ENERGY_START = 25; // energy = height in pixels of the jump
+var ENERGY_DEFAULT_JUMP = 25; // default jump if no request from the player
+var ENERGY_GAIN_ON_LANDING = 20; // energy gain after a default jump while energy < ENERGY_MAX_FOR_GAIN_ON_LANDING
+var ENERGY_MAX_FOR_GAIN_ON_LANDING = 150; // max energy that can be reached by consecutive default jumps
+var ACCEPTANCE_DELAY_BEFORE_LANDING = 1000; // milliseconds, delay to accept player jump request before landing
+var ACCEPTANCE_DELAY_AFTER_LANDING = 100; // milliseconds, delay between landing and rebounce, to allow player to fire the jump
 var JUMP_RANDOMNESS_PERCENT = 5; // +/- randomness on jump height and distance; 0 means no randomness
-var JUMP_RATIO = 0.8; // jump height / jump distance, if GRAVITY_RATIO = 1.0
-var GRAVITY_RATIO = 5; // gravity multiplication factor when going down (>1.0 for fast fall, <1.0 for long fall)
+var JUMP_RATIO = 0.5; // shape of the jump: jump height / jump distance
+var GRAVITY_RATIO = 5; // shape of the jump: gravity multiplication factor when going down
+                       // >1.0 for heavy fall, <1.0 for lighter and longer fall
+                       // riseTime/fallTime = sqrt(GRAVITY_RATIO)
 var TRACE_FRAME_STEP = 2; // number of frames between each trace update
-var TRACE_SIZE = 3; // size of trace blocks
+var TRACE_MAX_COUNT = 200; // max number of traces to remember
+var TRACE_SIZE = 2; // size of trace blocks
 
 var X_KANGAROO = CANVAS_WIDTH / 1.1;
 var Z_KANGAROO = 1; // a bit in front
@@ -78,13 +80,13 @@ function drawLeftPanel() {
       w: LEFT_MARGIN,
       h: WORLD_HEIGHT,
     })
-    .color("white",0) // transparent
+    .color("white", 0) // transparent
     .bind("MouseDown", function (MouseEvent) {
-      Crafty("Kangaroo").userJumpRequest();
+      Crafty("Kangaroo").onPlayerJumpRequest();
     });
 
   // energy reserve
-  barEnergyReserve = Crafty.e("2D, Canvas, Color")
+  energyBar = Crafty.e("2D, Canvas, Color")
     .attr({
       x: 0,
       y: WORLD_HEIGHT,
@@ -93,26 +95,10 @@ function drawLeftPanel() {
     })
     .color("orange")
     .bind("UpdateFrame", function (data) {
-      // update height according to energy reserve
-      energyReserve = Crafty("Kangaroo").get(0).energyReserve;
-      this.y = WORLD_HEIGHT - energyReserve;
-      this.h = energyReserve;
-    });
-
-  // energy for next jump
-  barEnergyForNextJump = Crafty.e("2D, Canvas, Color")
-    .attr({
-      x: 5,
-      y: WORLD_HEIGHT,
-      w: 20,
-      h: 0,
-    })
-    .color("orangered")
-    .bind("UpdateFrame", function (data) {
-      // update height according to energy for next jump
-      energyForNextJump = Crafty("Kangaroo").get(0).energyForNextJump;
-      this.y = WORLD_HEIGHT - energyForNextJump;
-      this.h = energyForNextJump;
+      // update height according to energy
+      energy = Crafty("Kangaroo").get(0).energy;
+      this.h = energy;
+      this.y = WORLD_HEIGHT - this.h;
     });
 }
 
@@ -144,50 +130,72 @@ function drawFooter() {
 // returns [initialJumpSpeed, gravity]
 function calculateJump(aHeight, aDistance) {
   // deduce duration (= time to reach peak = half time of whole jump)
-  aDuration = 0.5*aDistance / speed;
+  durationToPeak = aDistance / (Math.abs(speed) * (1 + 1 / Math.sqrt(GRAVITY_RATIO)));
   // them compute speed and gravity
-  initialJumpSpeed = (2 * aHeight) / aDuration;
-  gravity = (2 * aHeight) / (aDuration * aDuration);
+  initialJumpSpeed = (2 * aHeight) / durationToPeak;
+  gravity = (2 * aHeight) / (durationToPeak * durationToPeak);
   return [initialJumpSpeed, gravity];
 }
 
-// update trace of each kangaroo:
-// - move previous traces to the left, by the distance travelled since last call
-// - remove trace outside of the world
+// change speed of game, by a multiplication factor
+// I don't use an absolute value because elements in the bacground (trees, clouds)
+// have a smaller speed. The further back the sloxer, to convey a perspective feeling.
+// multiplier: >1: accelerate <1: decelerate  -1: mirror  
+function changeSpeed(aSpeedMultiplier)
+{
+  speed*= aSpeedMultiplier;
+  // adapt the speed of all "Motion" components
+  Crafty("Motion").get().forEach(function(entity){
+    entity.vx *= aSpeedMultiplier;
+  })
+}
+
+// update trace of each kangaroo: (supports multiple kangaroos, who knows
+// could be needed in the future)
+// Actions:
+// - remove too old traces
+// - set older traces more transparent
 // - put a new trace at the new position
+// Notes:
+// - the motion is managed by the "Motion" component
+// - the traces are a FIFO list
 function updateTraces() {
-  distanceTravelled = distance - tracesLastDistance;
-  tracesLastDistance = distance;
   kangarooEntities = Crafty("Kangaroo").get();
+  // i = kangaroo index
+  // j = trace index
   for (i = 0; i < kangarooEntities.length; i++) {
     // first check if there are already traces for this kangaroo
     if (traces.length > i) {
-      // move previous traces and made them more transparent
-      for (j = 0; j < traces[i].length; j++) {
-        traces[i][j].x -= distanceTravelled;
-        colorStrength = (traces[i][j].x - LEFT_MARGIN)/(X_KANGAROO - LEFT_MARGIN);
-        traces[i][j].color("sandybrown",colorStrength);
-        // remove it if too far left, outside of the world
-        if (traces[i][j].x < LEFT_MARGIN) {
+      // remove too old traces, at beginning of list
+      if (traces[i].length > TRACE_MAX_COUNT){
+        for (j=0; j< traces[i].length - TRACE_MAX_COUNT ;j++){
           // destroy the entity
           traces[i][j].destroy();
-          // and remove it from the list, it should be the first one
-          // therefore we use the shift() method
-          traces[i].shift();
         }
+        // and remove them from the list
+        traces[i].splice(0,traces[i].length - TRACE_MAX_COUNT);
+      }
+      // make old traces more transparent
+      for (j=0; j < traces[i].length ;j++){
+        // strength = 1.0 for last element (the newest)
+        // strength = 1/TRACE_MAX_COUNT for first element (the oldest)
+        colorStrength = (j+1)/traces[i].length;
+        traces[i][j].color("sandybrown", colorStrength);
       }
     } else {
       // create the list of traces for this kangaroo
       traces[i] = [];
     }
+
     // put a new trace at the new position (bottom left)
     traces[i].push(
-      Crafty.e("2D, Canvas, Color")
+      Crafty.e("2D, Canvas, Color, Trace, Motion")
         .attr({
           x: kangarooEntities[i].x - TRACE_SIZE,
           y: kangarooEntities[i].y + kangarooEntities[i].h - TRACE_SIZE,
           w: TRACE_SIZE,
           h: TRACE_SIZE,
+          vx: - speed,  // linear velocity, inherited from "Motion" component
         })
         .color("sandybrown")
     );
@@ -201,95 +209,108 @@ function updateTraces() {
 Crafty.c("Kangaroo", {
   required: "2D, Jumper, Gravity, Keyboard",
   init: function () {
-    this.currentGravity = 500;
+    // exported properties
+    // We could also really use "properties", but that seems overkill
+    this.yAtLiftOff = WORLD_HEIGHT; // y when last jump was started
+    this.timeAtLiftOff = 0; // time of last jump start
+    this.yPrevious = WORLD_HEIGHT; // y at the previous frame
+    this.goingUp = false; // true if we are going up
+    this.energy = ENERGY_START; // energy reserve
+    this.currentTargetHeight = 0; // target height of the current jump
+    this.currentJumpSpeed = ENERGY_DEFAULT_JUMP; // jump speed used at the start of the current jump
+    this.currentGravity = 500; // current gravity used, will be recalculated at each jump
+    this.currentPlayerJump = false; // true if the current jump was triggered by the player (ie not a default jump)
+    this.playerJumpRequestLatched = false; // true if the player requested a jump
+    this.playerJumpRequestLatchTime = 0; // time of the request
+    this.timeOfLastLanding = 0; // time of last lading on ground
+    // init operations
     this.gravityConst(this.currentGravity);
     this.gravity("Floor");
-  },
-  properties: {
-    yAtLiftOff: {
-      writable: true,
-    },
-    timeAtLiftOff: {
-      writable: true,
-    },
-    yPrevious: {
-      value: 1000,
-      writable: true,
-    },
-    goingUp: {
-      value: false,
-      writable: true,
-    },
-    energyReserve: {
-      value: ENERGY_START,
-      writable: true,
-    },
-    energyForNextJump: {
-      value: ENERGY_SMALLEST_JUMP,
-      writable: true,
-    },
-    currentJumpSpeed: {
-      value: ENERGY_SMALLEST_JUMP,
-      writable: true,
-    },
-    currentGravity: {
-      writable: true,
-    },
+    this.preventGroundTunneling(true); // Prevent entity from falling through thin ground entities at high speeds.
   },
   events: {
     KeyDown: function (e) {
-      if (e.key == Crafty.keys.SPACE) {
-        this.userJumpRequest();
+      if (e.key == Crafty.keys.SPACE || e.key == Crafty.keys.UP_ARROW) {
+        this.onPlayerJumpRequest();
       }
     },
     // CheckLanding: triggered when the kangaroo is about to land
-    CheckLanding: function(ground){
+    CheckLanding: function (ground) {
       this.color("red");
     },
     LandedOnGround: function (ground) {
-      // open the acceptance window for jump request
-      this.toggleComponent("AcceptUserJumpRequest");
+      this.timeOfLastLanding = new Date().getTime(); // milliseconds
       // rebounce after a short delay, to leave a bit
-      // of time for the user to fire the jump
-      Crafty.e("Delay").delay(this.triggerRebounce, ACCEPTANCE_DELAY_AFTER_LANDING, 0);
+      // of time for the player to fire the jump
+      Crafty.e("Delay").delay(
+        this.triggerRebounce,
+        ACCEPTANCE_DELAY_AFTER_LANDING,
+        0
+      );
     },
-    Rebounce: function(aEntity) {
+    Rebounce: function (aEntity) {
       this.color("orange");
-      this.toggleComponent("AcceptUserJumpRequest");
-      randomFactor = 1 - JUMP_RANDOMNESS_PERCENT/100 + (Math.random())*(2*JUMP_RANDOMNESS_PERCENT/100);
-      heightOfJump = this.energyForNextJump * randomFactor;
+      // check if the player requested a jump within the acceptance window
+      playerJump = false;
+      if (this.playerJumpRequestLatched) {
+        this.playerJumpRequestLatched = false; // consume the latched request
+        requestDelay = new Date().getTime() - this.playerJumpRequestLatchTime; // in milliseconds
+        if (
+          requestDelay <
+          ACCEPTANCE_DELAY_BEFORE_LANDING + ACCEPTANCE_DELAY_AFTER_LANDING
+        ) {
+          playerJump = true;
+        }
+      }
+
+      // Make a new jump (rebounce)
+      if (playerJump) {
+        // the new jump is requested by the player
+        this.currentPlayerJump = true;
+        this.currentTargetHeight = this.energy; // use the full energy reserve
+      } else {
+        // the new jump is a default jump
+        // in case the energy has been decreased below the default jump,
+        // the jump will be smaller
+        this.currentPlayerJump = false;
+        this.currentTargetHeight = Math.min(ENERGY_DEFAULT_JUMP, this.energy);
+      }
+      // introduce some randomness in the jump height
+      randomFactor =
+        1 -
+        JUMP_RANDOMNESS_PERCENT / 100 +
+        Math.random() * ((2 * JUMP_RANDOMNESS_PERCENT) / 100);
+      heightOfJump = this.currentTargetHeight * randomFactor;
       distanceOfJump = heightOfJump / JUMP_RATIO;
       [initialJumpSpeed, gravity] = calculateJump(heightOfJump, distanceOfJump);
       this.currentJumpSpeed = initialJumpSpeed;
       this.currentGravity = gravity;
       this.gravityConst(gravity);
       this.jumpSpeed(this.currentJumpSpeed);
+      // and now: jump !
       this.jump();
-      // consume the energy for the jump
-      this.energyReserve -= this.energyForNextJump;
-      // gain from landing, unconditional
-      this.energyReserve += ENERGY_GAIN_ON_LANDING;
-      // extra gain on landing while the energy is under some threshold,
-      // and only if jump is the smallest jump
-      if (this.energyForNextJump <= ENERGY_SMALLEST_JUMP &&
-        this.energyReserve < ENERGY_MAX_FOR_EXTRA_GAIN_ON_LANDING) {
-        this.energyReserve += ENERGY_EXTRA_GAIN_ON_LANDING;
-      }
-      // by default reset to minimal jump for next time
-      this.energyForNextJump = ENERGY_SMALLEST_JUMP;
       // indicate that we are going up
       this.yAtLiftOff = this.y;
       this.timeAtLiftOff = new Date().getTime();
       this.goingUp = true;
+
+      // update the energy
+      if (this.currentTargetHeight <= ENERGY_DEFAULT_JUMP) {
+        // we started a default jump or a very small player jump:
+        // increase the energy until some limit
+        if (this.energy < ENERGY_MAX_FOR_GAIN_ON_LANDING) {
+          this.energy += ENERGY_GAIN_ON_LANDING;
+        }
+      }
     },
     UpdateFrame: function (eventData) {
       this.checkPeakReached();
     },
     PeakReached: function (y) {
-      // when peak reached we could decide to do special actions,
+      // when peak reached we can do special actions,
       // like disable gravity ("flying!") or increase gravity
       // (sudden fall)
-      if (DEBUG) {
+      if (DEBUG && 0) {
         console.log(
           "Peak reached: gravity = ",
           this.currentGravity,
@@ -305,10 +326,11 @@ Crafty.c("Kangaroo", {
       // heavier fall
       this.currentGravity *= GRAVITY_RATIO;
       this.gravityConst(this.currentGravity);
+      // reset the energy, if the target was higher than the default jump
+      if (this.currentTargetHeight > ENERGY_DEFAULT_JUMP) {
+        this.energy = ENERGY_DEFAULT_JUMP;
+      }
     },
-    RetryUserJumpRequest: function(){
-      this.userJumpRequest();
-    }
   },
   checkPeakReached: function () {
     // Check if we reached the peak and start going down
@@ -319,25 +341,39 @@ Crafty.c("Kangaroo", {
     }
     this.yPrevious = this.y;
   },
-  userJumpRequest: function () {
-    // treat request from the user, to use the entire energy available
-    // This request is only accepted in a small window before rebounce
-    if (this.has("AcceptUserJumpRequest")){
-      this.energyForNextJump = this.energyReserve;
-    }
-    else
-    {
-      // if we are not yet in the acceptance window, try again a bit later
-      Crafty.e("Delay").delay(this.triggerRetryUserJumpRequest, ACCEPTANCE_DELAY_BEFORE_LANDING, 0);
-    }
+  onPlayerJumpRequest: function () {
+    // if we are in the going up phase, it means we already rebounced
+    // in that case, 
+
+    // latch the request and the current time, we'll check at rebounce if
+    // the request was in the acceptance window
+    this.playerJumpRequestLatched = true;
+    this.playerJumpRequestLatchTime = new Date().getTime();
   },
-  triggerRetryUserJumpRequest: function() {
-    Crafty.trigger("RetryUserJumpRequest");
-  },
-  triggerRebounce: function(){
+  triggerRebounce: function () {
     Crafty.trigger("Rebounce", this);
   },
-});
+}); // end of Kangaroo component
+
+Crafty.bind("KeyDown", function (e){
+  if (DEBUG){
+    if (e.key == Crafty.keys.ADD){ // '+' in numeric keypad
+      // increase speed
+      changeSpeed(1.1);
+      console.log("speed = ", speed);
+    }
+    else if (e.key == Crafty.keys.SUBSTRACT){ // - on numpad
+      // decrease speed
+      changeSpeed(0.9);
+      console.log("speed = ", speed);
+    }
+    else if (e.key == Crafty.keys.MULTIPLY){ // * on numpad
+      // mirror effect
+      changeSpeed(-1.0);
+      console.log("speed = ", speed);
+    }
+  }
+})
 
 Crafty.bind("UpdateFrame", function (eventData) {
   // update the distance
@@ -348,6 +384,7 @@ Crafty.bind("UpdateFrame", function (eventData) {
     updateTraces();
   }
 });
+
 
 Crafty.scene("main", function () {
   startTime = new Date().getTime();
