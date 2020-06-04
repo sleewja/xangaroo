@@ -16,13 +16,13 @@ var ENERGY_START = 25; // energy = height in pixels of the jump
 var ENERGY_DEFAULT_JUMP = 25; // default jump if no request from the player
 var ENERGY_GAIN_ON_LANDING = 20; // energy gain after a default jump while energy < ENERGY_MAX_FOR_GAIN_ON_LANDING
 var ENERGY_MAX_FOR_GAIN_ON_LANDING = 150; // max energy that can be reached by consecutive default jumps
-var ACCEPTANCE_DELAY_BEFORE_LANDING = 1000; // milliseconds, delay to accept player jump request before landing
+var ACCEPTANCE_DELAY_BEFORE_LANDING = 900; // milliseconds, delay to accept player jump request before landing
 var ACCEPTANCE_DELAY_AFTER_LANDING = 100; // milliseconds, delay between landing and rebounce, to allow player to fire the jump
 var JUMP_RANDOMNESS_PERCENT = 5; // +/- randomness on jump height and distance; 0 means no randomness
 var JUMP_RATIO = 0.5; // shape of the jump: jump height / jump distance
 var GRAVITY_RATIO = 5; // shape of the jump: gravity multiplication factor when going down
-                       // >1.0 for heavy fall, <1.0 for lighter and longer fall
-                       // riseTime/fallTime = sqrt(GRAVITY_RATIO)
+// >1.0 for heavy fall, <1.0 for lighter and longer fall
+// riseTime/fallTime = sqrt(GRAVITY_RATIO)
 var TRACE_FRAME_STEP = 2; // number of frames between each trace update
 var TRACE_MAX_COUNT = 200; // max number of traces to remember
 var TRACE_SIZE = 2; // size of trace blocks
@@ -83,6 +83,9 @@ function drawLeftPanel() {
     .color("white", 0) // transparent
     .bind("MouseDown", function (MouseEvent) {
       Crafty("Kangaroo").onPlayerJumpRequest();
+    })
+    .bind("MouseUp", function (MouseEvent) {
+      Crafty("Kangaroo").onPlayerJumpStopRequest();
     });
 
   // energy reserve
@@ -91,7 +94,7 @@ function drawLeftPanel() {
       x: 0,
       y: WORLD_HEIGHT,
       w: 30,
-      h: 0,
+      h: 0, // initially empty
     })
     .color("orange")
     .bind("UpdateFrame", function (data) {
@@ -99,6 +102,29 @@ function drawLeftPanel() {
       energy = Crafty("Kangaroo").get(0).energy;
       this.h = energy;
       this.y = WORLD_HEIGHT - this.h;
+    });
+
+  // energy used for the current jump (player-controlled jump)
+  energyUsedBar = Crafty.e("2D, Canvas, Color")
+    .attr({
+      x: 5,
+      y: WORLD_HEIGHT,
+      w: 20,
+      h: 0, // initially empty
+    })
+    .color("red", 0.75) // slightly transparent
+    .bind("UpdateFrame", function (data) {
+      // update height according to energy used by controlled jump
+      kangarooEntity = Crafty("Kangaroo").get(0);
+      if (kangarooEntity.playerControl) {
+        currentJumpHeight = kangarooEntity.yAtLiftOff - kangarooEntity.y;
+        this.h = currentJumpHeight;
+        this.y = WORLD_HEIGHT - this.h;
+      } else {
+        // empty
+        this.h = 0;
+        this.y = WORLD_HEIGHT;
+      }
     });
 }
 
@@ -130,24 +156,27 @@ function drawFooter() {
 // returns [initialJumpSpeed, gravity]
 function calculateJump(aHeight, aDistance) {
   // deduce duration (= time to reach peak = half time of whole jump)
-  durationToPeak = aDistance / (Math.abs(speed) * (1 + 1 / Math.sqrt(GRAVITY_RATIO)));
-  // them compute speed and gravity
+  durationToPeak =
+    aDistance / (Math.abs(speed) * (1 + 1 / Math.sqrt(GRAVITY_RATIO)));
+  // then compute speed and gravity
   initialJumpSpeed = (2 * aHeight) / durationToPeak;
   gravity = (2 * aHeight) / (durationToPeak * durationToPeak);
   return [initialJumpSpeed, gravity];
 }
 
 // change speed of game, by a multiplication factor
-// I don't use an absolute value because elements in the bacground (trees, clouds)
-// have a smaller speed. The further back the sloxer, to convey a perspective feeling.
-// multiplier: >1: accelerate <1: decelerate  -1: mirror  
-function changeSpeed(aSpeedMultiplier)
-{
-  speed*= aSpeedMultiplier;
+// I don't use an absolute value because elements in the background (trees, clouds)
+// have a smaller speed. The further back the slower, to convey a perspective feeling.
+// multiplier: >1: accelerate <1: decelerate  -1: mirror (useful if we hit a wall or
+// a big rock)
+function changeSpeed(aSpeedMultiplier) {
+  speed *= aSpeedMultiplier;
   // adapt the speed of all "Motion" components
-  Crafty("Motion").get().forEach(function(entity){
-    entity.vx *= aSpeedMultiplier;
-  })
+  Crafty("Motion")
+    .get()
+    .forEach(function (entity) {
+      entity.vx *= aSpeedMultiplier;
+    });
 }
 
 // update trace of each kangaroo: (supports multiple kangaroos, who knows
@@ -167,19 +196,19 @@ function updateTraces() {
     // first check if there are already traces for this kangaroo
     if (traces.length > i) {
       // remove too old traces, at beginning of list
-      if (traces[i].length > TRACE_MAX_COUNT){
-        for (j=0; j< traces[i].length - TRACE_MAX_COUNT ;j++){
+      if (traces[i].length > TRACE_MAX_COUNT) {
+        for (j = 0; j < traces[i].length - TRACE_MAX_COUNT; j++) {
           // destroy the entity
           traces[i][j].destroy();
         }
         // and remove them from the list
-        traces[i].splice(0,traces[i].length - TRACE_MAX_COUNT);
+        traces[i].splice(0, traces[i].length - TRACE_MAX_COUNT);
       }
       // make old traces more transparent
-      for (j=0; j < traces[i].length ;j++){
+      for (j = 0; j < traces[i].length; j++) {
         // strength = 1.0 for last element (the newest)
         // strength = 1/TRACE_MAX_COUNT for first element (the oldest)
-        colorStrength = (j+1)/traces[i].length;
+        colorStrength = (j + 1) / traces[i].length;
         traces[i][j].color("sandybrown", colorStrength);
       }
     } else {
@@ -195,7 +224,7 @@ function updateTraces() {
           y: kangarooEntities[i].y + kangarooEntities[i].h - TRACE_SIZE,
           w: TRACE_SIZE,
           h: TRACE_SIZE,
-          vx: - speed,  // linear velocity, inherited from "Motion" component
+          vx: -speed, // linear velocity, inherited from "Motion" component
         })
         .color("sandybrown")
     );
@@ -222,6 +251,8 @@ Crafty.c("Kangaroo", {
     this.currentPlayerJump = false; // true if the current jump was triggered by the player (ie not a default jump)
     this.playerJumpRequestLatched = false; // true if the player requested a jump
     this.playerJumpRequestLatchTime = 0; // time of the request
+    this.playerControl = false; // true while the player presses the fire key or button
+    this.playerControlledEnergy = 0; // energy requested by controlled jump
     this.timeOfLastLanding = 0; // time of last lading on ground
     // init operations
     this.gravityConst(this.currentGravity);
@@ -232,6 +263,11 @@ Crafty.c("Kangaroo", {
     KeyDown: function (e) {
       if (e.key == Crafty.keys.SPACE || e.key == Crafty.keys.UP_ARROW) {
         this.onPlayerJumpRequest();
+      }
+    },
+    KeyUp: function (e) {
+      if (e.key == Crafty.keys.SPACE || e.key == Crafty.keys.UP_ARROW) {
+        this.onPlayerJumpStopRequest();
       }
     },
     // CheckLanding: triggered when the kangaroo is about to land
@@ -267,13 +303,15 @@ Crafty.c("Kangaroo", {
       if (playerJump) {
         // the new jump is requested by the player
         this.currentPlayerJump = true;
-        this.currentTargetHeight = this.energy; // use the full energy reserve
+        this.currentTargetHeight = this.energy; // use the full energy reserve at start of jump
+        this.playerControl = true;
       } else {
         // the new jump is a default jump
         // in case the energy has been decreased below the default jump,
         // the jump will be smaller
         this.currentPlayerJump = false;
         this.currentTargetHeight = Math.min(ENERGY_DEFAULT_JUMP, this.energy);
+        this.playerControl = false;
       }
       // introduce some randomness in the jump height
       randomFactor =
@@ -294,10 +332,9 @@ Crafty.c("Kangaroo", {
       this.timeAtLiftOff = new Date().getTime();
       this.goingUp = true;
 
-      // update the energy
-      if (this.currentTargetHeight <= ENERGY_DEFAULT_JUMP) {
-        // we started a default jump or a very small player jump:
-        // increase the energy until some limit
+      // increase the energy, only in case of default jump
+      if (!this.currentPlayerJump) {
+        // we started a default jump: increase the energy until some limit
         if (this.energy < ENERGY_MAX_FOR_GAIN_ON_LANDING) {
           this.energy += ENERGY_GAIN_ON_LANDING;
         }
@@ -306,7 +343,7 @@ Crafty.c("Kangaroo", {
     UpdateFrame: function (eventData) {
       this.checkPeakReached();
     },
-    PeakReached: function (y) {
+    PeakReached: function (peakHeight) {
       // when peak reached we can do special actions,
       // like disable gravity ("flying!") or increase gravity
       // (sudden fall)
@@ -317,18 +354,28 @@ Crafty.c("Kangaroo", {
           " jumpSpeed = ",
           this.currentJumpSpeed,
           " height reached = ",
-          Math.round(this.yAtLiftOff - y),
+          Math.round(peakHeight),
           " in ",
           new Date().getTime() - this.timeAtLiftOff,
           "[ms]"
         );
       }
-      // heavier fall
-      this.currentGravity *= GRAVITY_RATIO;
-      this.gravityConst(this.currentGravity);
-      // reset the energy, if the target was higher than the default jump
-      if (this.currentTargetHeight > ENERGY_DEFAULT_JUMP) {
-        this.energy = ENERGY_DEFAULT_JUMP;
+      // stop player jump request (if not yet stopped by the player)
+      // and in case of default jump: apply the heavier gravity also
+      // (like for user-controlled jumps)
+      if (this.playerControl || !this.currentPlayerJump) {
+        this.playerControl = false;
+        this.playerControlledEnergy = this.yAtLiftOff - this.y; // remember the energy requested by the controlled jump
+        this.currentGravity *= GRAVITY_RATIO;
+        this.gravityConst(this.currentGravity);
+      }
+      // remove the used energy, in case of user jump
+      // and keep at least enough energy for a default jump
+      if (this.currentPlayerJump) {
+        this.energy = Math.max(
+          this.energy - this.playerControlledEnergy,
+          ENERGY_DEFAULT_JUMP
+        );
       }
     },
   },
@@ -337,43 +384,57 @@ Crafty.c("Kangaroo", {
     if (this.y >= this.yPrevious && this.goingUp) {
       // we reached the peak, we start going down
       this.goingUp = false;
-      Crafty.trigger("PeakReached", this.y);
+      peakHeight = this.yAtLiftOff - this.y;
+      Crafty.trigger("PeakReached", peakHeight);
     }
     this.yPrevious = this.y;
   },
   onPlayerJumpRequest: function () {
-    // if we are in the going up phase, it means we already rebounced
-    // in that case, 
-
     // latch the request and the current time, we'll check at rebounce if
     // the request was in the acceptance window
     this.playerJumpRequestLatched = true;
     this.playerJumpRequestLatchTime = new Date().getTime();
+  },
+  onPlayerJumpStopRequest: function () {
+    // if a jump request was latched (ie jump not yet started)
+    // then the latched request is discarded
+    if (this.playerJumpRequestLatched) {
+      this.playerJumpRequestLatched = false;
+    }
+    // if we are in a player-controlled jump: stop the jump
+    // and start falling down by increasing the gravity
+    if (this.playerControl) {
+      this.playerControl = false;
+      this.playerControlledEnergy = this.yAtLiftOff - this.y; // remember the energy requested by the controlled jump
+      this.currentGravity *= GRAVITY_RATIO;
+      this.gravityConst(this.currentGravity);
+    }
   },
   triggerRebounce: function () {
     Crafty.trigger("Rebounce", this);
   },
 }); // end of Kangaroo component
 
-Crafty.bind("KeyDown", function (e){
-  if (DEBUG){
-    if (e.key == Crafty.keys.ADD){ // '+' in numeric keypad
+Crafty.bind("KeyDown", function (e) {
+  if (DEBUG) {
+    if (e.key == Crafty.keys.ADD) {
+      // '+' in numeric keypad
       // increase speed
       changeSpeed(1.1);
       console.log("speed = ", speed);
-    }
-    else if (e.key == Crafty.keys.SUBSTRACT){ // - on numpad
+    } else if (e.key == Crafty.keys.SUBSTRACT) {
+      // - on numpad
       // decrease speed
       changeSpeed(0.9);
       console.log("speed = ", speed);
-    }
-    else if (e.key == Crafty.keys.MULTIPLY){ // * on numpad
+    } else if (e.key == Crafty.keys.MULTIPLY) {
+      // * on numpad
       // mirror effect
       changeSpeed(-1.0);
       console.log("speed = ", speed);
     }
   }
-})
+});
 
 Crafty.bind("UpdateFrame", function (eventData) {
   // update the distance
@@ -384,7 +445,6 @@ Crafty.bind("UpdateFrame", function (eventData) {
     updateTraces();
   }
 });
-
 
 Crafty.scene("main", function () {
   startTime = new Date().getTime();
