@@ -16,8 +16,9 @@ var ENERGY_START = 25; // energy = height in pixels of the jump
 var ENERGY_DEFAULT_JUMP = 25; // default jump if no request from the player
 var ENERGY_GAIN_ON_LANDING = 20; // energy gain after a default jump while energy < ENERGY_MAX_FOR_GAIN_ON_LANDING
 var ENERGY_MAX_FOR_GAIN_ON_LANDING = 150; // max energy that can be reached by consecutive default jumps
-var ACCEPTANCE_DELAY_BEFORE_LANDING = 900; // milliseconds, delay to accept player jump request before landing
-var ACCEPTANCE_DELAY_AFTER_LANDING = 100; // milliseconds, delay between landing and rebounce, to allow player to fire the jump
+var ACCEPTANCE_DELAY_BEFORE_LANDING = 500; // milliseconds, delay to accept player jump request before landing
+var ACCEPTANCE_DELAY_AFTER_LANDING = 0; // milliseconds, delay between landing and rebounce where we stay on the ground, to allow player to fire the jump
+var ACCEPTANCE_DELAY_AFTER_LIFTOFF = 250; // milliseconds, delay to accept player jump request after a jump has startedn 
 var JUMP_RANDOMNESS_PERCENT = 5; // +/- randomness on jump height and distance; 0 means no randomness
 var JUMP_RATIO = 0.5; // shape of the jump: jump height / jump distance
 var GRAVITY_RATIO = 5; // shape of the jump: gravity multiplication factor when going down
@@ -32,9 +33,8 @@ var Z_KANGAROO = 1; // a bit in front
 
 var startTime;
 var speed; // speed of the game, in pixels/seconds
-var distance; // distance in pixels
+var distance; // distance travelled in pixels
 var traces = []; // array of arrays of entities: trace of kangaroo(s)
-var tracesLastDistance = 0; // last distance where traces were updated
 
 // ***********************************************
 // init Crafty
@@ -121,9 +121,11 @@ function drawLeftPanel() {
         this.h = currentJumpHeight;
         this.y = WORLD_HEIGHT - this.h;
       } else {
-        // empty
-        this.h = 0;
-        this.y = WORLD_HEIGHT;
+        // empty the control bar when we start going down
+        if (this.h > 0 && !kangarooEntity.goingUp){
+          this.h = 0;
+          this.y = WORLD_HEIGHT;
+        }
       }
     });
 }
@@ -155,7 +157,7 @@ function drawFooter() {
 // see this very usful explanation: https://www.youtube.com/watch?v=hG9SzQxaCm8
 // returns [initialJumpSpeed, gravity]
 function calculateJump(aHeight, aDistance) {
-  // deduce duration (= time to reach peak = half time of whole jump)
+  // compute duration = time to reach peak
   durationToPeak =
     aDistance / (Math.abs(speed) * (1 + 1 / Math.sqrt(GRAVITY_RATIO)));
   // then compute speed and gravity
@@ -274,6 +276,10 @@ Crafty.c("Kangaroo", {
     CheckLanding: function (ground) {
       this.color("red");
     },
+    // checkJumping: triggered when a jump is requested
+    CheckJumping: function(ground) {
+      this.canJump = true; // always allow jump, even double-jump
+    },
     LandedOnGround: function (ground) {
       this.timeOfLastLanding = new Date().getTime(); // milliseconds
       // rebounce after a short delay, to leave a bit
@@ -287,7 +293,7 @@ Crafty.c("Kangaroo", {
     Rebounce: function (aEntity) {
       this.color("orange");
       // check if the player requested a jump within the acceptance window
-      playerJump = false;
+      this.currentPlayerJump = false;
       if (this.playerJumpRequestLatched) {
         this.playerJumpRequestLatched = false; // consume the latched request
         requestDelay = new Date().getTime() - this.playerJumpRequestLatchTime; // in milliseconds
@@ -295,38 +301,24 @@ Crafty.c("Kangaroo", {
           requestDelay <
           ACCEPTANCE_DELAY_BEFORE_LANDING + ACCEPTANCE_DELAY_AFTER_LANDING
         ) {
-          playerJump = true;
+          this.currentPlayerJump = true;
         }
       }
 
       // Make a new jump (rebounce)
-      if (playerJump) {
+      if (this.currentPlayerJump) {
         // the new jump is requested by the player
-        this.currentPlayerJump = true;
         this.currentTargetHeight = this.energy; // use the full energy reserve at start of jump
         this.playerControl = true;
       } else {
         // the new jump is a default jump
         // in case the energy has been decreased below the default jump,
         // the jump will be smaller
-        this.currentPlayerJump = false;
         this.currentTargetHeight = Math.min(ENERGY_DEFAULT_JUMP, this.energy);
         this.playerControl = false;
       }
-      // introduce some randomness in the jump height
-      randomFactor =
-        1 -
-        JUMP_RANDOMNESS_PERCENT / 100 +
-        Math.random() * ((2 * JUMP_RANDOMNESS_PERCENT) / 100);
-      heightOfJump = this.currentTargetHeight * randomFactor;
-      distanceOfJump = heightOfJump / JUMP_RATIO;
-      [initialJumpSpeed, gravity] = calculateJump(heightOfJump, distanceOfJump);
-      this.currentJumpSpeed = initialJumpSpeed;
-      this.currentGravity = gravity;
-      this.gravityConst(gravity);
-      this.jumpSpeed(this.currentJumpSpeed);
-      // and now: jump !
-      this.jump();
+      this.startJump(this.currentTargetHeight);
+
       // indicate that we are going up
       this.yAtLiftOff = this.y;
       this.timeAtLiftOff = new Date().getTime();
@@ -359,7 +351,7 @@ Crafty.c("Kangaroo", {
           new Date().getTime() - this.timeAtLiftOff,
           "[ms]"
         );
-      }
+      } 
       // stop player jump request (if not yet stopped by the player)
       // and in case of default jump: apply the heavier gravity also
       // (like for user-controlled jumps)
@@ -379,6 +371,22 @@ Crafty.c("Kangaroo", {
       }
     },
   },
+  startJump: function(aTargetHeight) {
+      // introduce some randomness in the jump height
+      randomFactor =
+        1 -
+        JUMP_RANDOMNESS_PERCENT / 100 +
+        Math.random() * ((2 * JUMP_RANDOMNESS_PERCENT) / 100);
+      heightOfJump = aTargetHeight * randomFactor;
+      distanceOfJump = heightOfJump / JUMP_RATIO;
+      [initialJumpSpeed, gravity] = calculateJump(heightOfJump, distanceOfJump);
+      this.currentJumpSpeed = initialJumpSpeed;
+      this.currentGravity = gravity;
+      this.gravityConst(gravity);
+      this.jumpSpeed(this.currentJumpSpeed);
+      // and now: jump !
+      this.jump();
+  },
   checkPeakReached: function () {
     // Check if we reached the peak and start going down
     if (this.y >= this.yPrevious && this.goingUp) {
@@ -390,10 +398,27 @@ Crafty.c("Kangaroo", {
     this.yPrevious = this.y;
   },
   onPlayerJumpRequest: function () {
+    // if we are going up and it's a default jump,
+    // then check if we are in the acceptance window,
+    // and if yes adapt the jump (double-jump)
+    if (this.goingUp && !this.currentPlayerJump){
+      if ( new Date().getTime() - this.timeAtLiftOff <= ACCEPTANCE_DELAY_AFTER_LIFTOFF){
+        // the jump becomes a player jump
+        this.currentPlayerJump = true;
+        this.currentTargetHeight = this.energy; // the target is relative to the liftoff altitude
+        this.playerControl = true; // start player-controlled jump
+        altitudeFromLiftOff = (this.yAtLiftOff - this.y);
+        this.startJump(this.currentTargetHeight - altitudeFromLiftOff);
+      }
+    }
+    // if we are still in the falling phase (not yet landed),
     // latch the request and the current time, we'll check at rebounce if
     // the request was in the acceptance window
-    this.playerJumpRequestLatched = true;
-    this.playerJumpRequestLatchTime = new Date().getTime();
+    else {
+      this.playerJumpRequestLatched = true;
+      this.playerJumpRequestLatchTime = new Date().getTime();
+    }
+
   },
   onPlayerJumpStopRequest: function () {
     // if a jump request was latched (ie jump not yet started)
