@@ -5,11 +5,19 @@
 var DEBUG = true; // display debug info
 
 var WORLD_WIDTH = 600;
-var WORLD_HEIGHT = (WORLD_WIDTH / 16) * 9;
-var LEFT_MARGIN = 50;
+var WORLD_HEIGHT = Math.round((WORLD_WIDTH / 16) * 9);
+var FLOOR_HEIGHT = 10;
+var Y_FLOOR = WORLD_HEIGHT - FLOOR_HEIGHT;
+var BUSH_HEIGHT = 150;
 var FOOTER_HEIGHT = 100;
+var LEFT_MARGIN = 50;
 var CANVAS_WIDTH = LEFT_MARGIN + WORLD_WIDTH;
 var CANVAS_HEIGHT = WORLD_HEIGHT + FOOTER_HEIGHT;
+
+var COLOR_FLOOR = "sandybrown";
+var COLOR_BUSH =  "#f7b77a";
+var COLOR_TRACES = "white";
+var COLOR_SKY = "skyblue";
 
 var SPEED_START = 60; // initial speed, in pixels/second
 var ENERGY_START = 25; // energy = height in pixels of the jump
@@ -19,22 +27,63 @@ var ENERGY_MAX_FOR_GAIN_ON_LANDING = 150; // max energy that can be reached by c
 var ACCEPTANCE_DELAY_BEFORE_LANDING = 500; // milliseconds, delay to accept player jump request before landing
 var ACCEPTANCE_DELAY_AFTER_LANDING = 0; // milliseconds, delay between landing and rebounce where we stay on the ground, to allow player to fire the jump
 var ACCEPTANCE_DELAY_AFTER_LIFTOFF = 250; // milliseconds, delay to accept player jump request after a jump has startedn 
-var JUMP_RANDOMNESS_PERCENT = 5; // +/- randomness on jump height and distance; 0 means no randomness
+var JUMP_RANDOMNESS_PERCENT = 0; // +/- randomness on jump height and distance; 0 means no randomness
 var JUMP_RATIO = 0.5; // shape of the jump: jump height / jump distance
 var GRAVITY_RATIO = 5; // shape of the jump: gravity multiplication factor when going down
 // >1.0 for heavy fall, <1.0 for lighter and longer fall
-// riseTime/fallTime = sqrt(GRAVITY_RATIO)
+// riseTime/fallTime = sqrt(GRAVITY_RATIO)-------
 var TRACE_FRAME_STEP = 2; // number of frames between each trace update
-var TRACE_MAX_COUNT = 200; // max number of traces to remember
+var TRACE_MAX_COUNT = 100; // max number of traces to remember
 var TRACE_SIZE = 2; // size of trace blocks
+var POPULATE_WORLD_X_STEP = 10; // pixel distance between two calls of populateWorld
+var DELAY_TO_DISAPPEAR = 5000; // milliseconds: delay to destroy a symbol after exiting the world on the left side, if depth=0. if depth >0: the delay will be longer
 
-var X_KANGAROO = CANVAS_WIDTH / 1.1;
+var X_KANGAROO = CANVAS_WIDTH / 3;
 var Z_KANGAROO = 1; // a bit in front
+var Z_PANEL = 10; // in front, to hide objects behind
 
 var startTime;
 var speed; // speed of the game, in pixels/seconds
 var distance; // distance travelled in pixels
+var distanceLastPopulate; // distance last time populateWorld was called
 var traces = []; // array of arrays of entities: trace of kangaroo(s)
+
+
+
+// ***********************************************
+// world automated generation
+// ***********************************************
+var symbols = [
+  {
+    component: "cloud",
+    color : "white",
+    distanceMin : 0, // min distance to appear in the world */ 
+    distanceIntervalMin : 0, // min pixel distance between two
+    distanceIntervalMax : 500, // max pixel distance between two
+    yMin : -20,
+    yMax : 100,
+    depthAtYMin : 1, // depth 0 = front, visual speed = speed / (1 + depth) (for perspective)
+    depthAtYMax : 10,
+    z : 1,
+    onHit : function(hitData){changeSpeed(1.1)}, // do nothing
+    distanceLast : 0, // position of the last one generated
+  },
+  {
+    component: "rock",
+    color : "crimson",
+    distanceMin : 0, // min distance to appear in the world */ 
+    distanceIntervalMin : 0, // min pixel distance between two
+    distanceIntervalMax : 500, // max pixel distance between two
+    yMin : 200,
+    yMax : 300,
+    depthAtYMin : 2, // depth 0 = front, visual speed = speed / (1 + depth) (for perspective)
+    depthAtYMax : 0,
+    z : 1,
+    onHit : function(hitData){changeSpeed(1/1.1)}, // do nothing
+    distanceLast : 0, // position of the last one generated
+  }
+]
+
 
 // ***********************************************
 // init Crafty
@@ -52,17 +101,37 @@ function drawWorld() {
   Crafty.e("Floor, 2D, Canvas, Color")
     .attr({
       x: LEFT_MARGIN,
-      y: WORLD_HEIGHT,
+      y: Y_FLOOR,
       w: CANVAS_WIDTH,
-      h: 10,
+      h: FLOOR_HEIGHT,
     })
-    .color("sandybrown");
+    .color(COLOR_FLOOR);
+
+  // bush
+  Crafty.e("2D, Canvas, Color")
+    .attr({
+      x: LEFT_MARGIN,
+      y: Y_FLOOR - BUSH_HEIGHT,
+      w: CANVAS_WIDTH,
+      h: BUSH_HEIGHT,
+    })
+    .color(COLOR_BUSH);
+
+  // sky
+  Crafty.e("2D, Canvas, Color")
+    .attr({
+      x: LEFT_MARGIN,
+      y: 0,
+      w: CANVAS_WIDTH,
+      h: WORLD_HEIGHT - FLOOR_HEIGHT - BUSH_HEIGHT,
+    })
+    .color(COLOR_SKY);
 
   // Add kangaroo player
   Crafty.e("2D, DOM, Color, Kangaroo")
     .attr({
       x: X_KANGAROO,
-      y: WORLD_HEIGHT - 20, // dropped from a bit above the floor
+      y: Y_FLOOR - 20, // dropped from a bit above the floor to start rebouncing
       w: 10,
       h: 10,
       z: Z_KANGAROO,
@@ -79,8 +148,9 @@ function drawLeftPanel() {
       y: 0,
       w: LEFT_MARGIN,
       h: WORLD_HEIGHT,
+      z: Z_PANEL,
     })
-    .color("white", 0) // transparent
+    .color("white")
     .bind("MouseDown", function (MouseEvent) {
       Crafty("Kangaroo").onPlayerJumpRequest();
     })
@@ -92,25 +162,28 @@ function drawLeftPanel() {
   energyBar = Crafty.e("2D, Canvas, Color")
     .attr({
       x: 0,
-      y: WORLD_HEIGHT,
+      y: Y_FLOOR, // initially empty
       w: 30,
       h: 0, // initially empty
+      z: Z_PANEL
     })
     .color("orange")
     .bind("UpdateFrame", function (data) {
       // update height according to energy
       energy = Crafty("Kangaroo").get(0).energy;
       this.h = energy;
-      this.y = WORLD_HEIGHT - this.h;
+      this.y = Y_FLOOR - this.h;
     });
 
   // energy used for the current jump (player-controlled jump)
+  // for the first kangaroo entity
   energyUsedBar = Crafty.e("2D, Canvas, Color")
     .attr({
       x: 5,
-      y: WORLD_HEIGHT,
+      y: Y_FLOOR, // initially empty
       w: 20,
       h: 0, // initially empty
+      z: Z_PANEL
     })
     .color("red", 0.75) // slightly transparent
     .bind("UpdateFrame", function (data) {
@@ -118,13 +191,13 @@ function drawLeftPanel() {
       kangarooEntity = Crafty("Kangaroo").get(0);
       if (kangarooEntity.playerControl) {
         currentJumpHeight = kangarooEntity.yAtLiftOff - kangarooEntity.y;
-        this.h = currentJumpHeight;
-        this.y = WORLD_HEIGHT - this.h;
+        this.h = currentJumpHeight * kangarooEntity.weight; // = used energy
+        this.y = Y_FLOOR - this.h;
       } else {
         // empty the control bar when we start going down
         if (this.h > 0 && !kangarooEntity.goingUp){
           this.h = 0;
-          this.y = WORLD_HEIGHT;
+          this.y = Y_FLOOR;
         }
       }
     });
@@ -166,11 +239,13 @@ function calculateJump(aHeight, aDistance) {
   return [initialJumpSpeed, gravity];
 }
 
-// change speed of game, by a multiplication factor
-// I don't use an absolute value because elements in the background (trees, clouds)
-// have a smaller speed. The further back the slower, to convey a perspective feeling.
-// multiplier: >1: accelerate <1: decelerate  -1: mirror (useful if we hit a wall or
-// a big rock)
+/** change speed of game, by a multiplication factor.
+ *  I don't use an absolute value because elements in the background (trees, clouds)
+ *  have a smaller speed. The further back the slower, to convey a perspective feeling.
+ * multiplier: 
+ * @param aSpeedMultiplier if >1: accelerate <1: decelerate  -1: mirror (useful if we hit
+ * a wall or a big rock)
+ */
 function changeSpeed(aSpeedMultiplier) {
   speed *= aSpeedMultiplier;
   // adapt the speed of all "Motion" components
@@ -211,7 +286,7 @@ function updateTraces() {
         // strength = 1.0 for last element (the newest)
         // strength = 1/TRACE_MAX_COUNT for first element (the oldest)
         colorStrength = (j + 1) / traces[i].length;
-        traces[i][j].color("sandybrown", colorStrength);
+        traces[i][j].color(COLOR_TRACES, colorStrength);
       }
     } else {
       // create the list of traces for this kangaroo
@@ -226,12 +301,65 @@ function updateTraces() {
           y: kangarooEntities[i].y + kangarooEntities[i].h - TRACE_SIZE,
           w: TRACE_SIZE,
           h: TRACE_SIZE,
+          z: Z_KANGAROO,
           vx: -speed, // linear velocity, inherited from "Motion" component
         })
-        .color("sandybrown")
+        .color(COLOR_TRACES)
     );
   }
 }
+
+/** Populate the world automatically with some randomness
+ * 
+ */
+function populateWorld(){
+  symbols.forEach(function(symbol){
+    // randomly decide if we create a new symbol
+    // we must have reached at least the min distance
+    if ( distance >= symbol.distanceMin ){
+      // and be separated from the last one by at least a minimal interval
+      distanceSinceLast = distance - symbol.distanceLast;
+      if ( distanceSinceLast >= symbol.distanceIntervalMin){
+        intervalLength = symbol.distanceIntervalMax  - symbol.distanceIntervalMin;
+        distanceTillEndOfInterval = symbol.distanceIntervalMax - distanceSinceLast;
+        // the probability to generate a symbol increases as we progress in the interval,
+        // if the symbol has not yet been generated
+        probability = 1 - distanceTillEndOfInterval / intervalLength;
+        if (Math.random() <= probability){
+          // give birth to a symbol!
+          symbol.distanceLast = distance;
+          yNewBorn = symbol.yMin + Math.random()*(symbol.yMax - symbol.yMin);
+          depthNewBorn = symbol.depthAtYMin + 
+                         (yNewBorn - symbol.yMin)/(symbol.yMax - symbol.yMin) *
+                         (symbol.depthAtYMax - symbol.depthAtYMin);
+          Crafty.e("2D, Canvas, Color, Motion, Collision, " + symbol.component)
+          .attr({
+            x: CANVAS_WIDTH, // create at the right side of the world
+            y: yNewBorn,
+            z: symbol.z,
+            w: 10, // will be set by the sprite
+            h: 10, // will be set by the sprite
+            vx: - speed / ( 1+ depthNewBorn), // for perspective: further away is slower
+          })
+          .color(symbol.color)
+          .checkHits("Kangaroo")
+          .bind("HitOn", function(hitData){
+            symbol.onHit(hitData);
+            if(DEBUG){console.log("Hit a ", symbol.component);}
+          })
+          .bind("Move", function(e){
+            // destroy the entity if it has moved too far away on the left border
+            if (this.x < LEFT_MARGIN-Math.abs(this.vx)*(DELAY_TO_DISAPPEAR/1000)){
+              if(DEBUG){console.log("destroy a " + symbol.component + " at x = ", this.x);}
+              this.destroy();
+            }
+          })
+        }
+      }
+    }
+  })
+}
+
 
 // ***********************************************
 // game logic
@@ -242,9 +370,10 @@ Crafty.c("Kangaroo", {
   init: function () {
     // exported properties
     // We could also really use "properties", but that seems overkill
-    this.yAtLiftOff = WORLD_HEIGHT; // y when last jump was started
+    this.weight = 1.0; // weight <1: lighter: will jump higher >1: heavier
+    this.yAtLiftOff = Y_FLOOR; // y when last jump was started
     this.timeAtLiftOff = 0; // time of last jump start
-    this.yPrevious = WORLD_HEIGHT; // y at the previous frame
+    this.yPrevious = Y_FLOOR; // y at the previous frame
     this.goingUp = false; // true if we are going up
     this.energy = ENERGY_START; // energy reserve
     this.currentTargetHeight = 0; // target height of the current jump
@@ -308,7 +437,8 @@ Crafty.c("Kangaroo", {
       // Make a new jump (rebounce)
       if (this.currentPlayerJump) {
         // the new jump is requested by the player
-        this.currentTargetHeight = this.energy; // use the full energy reserve at start of jump
+        // use the full energy reserve at start of jump
+        this.currentTargetHeight = this.energy / this.weight; 
         this.playerControl = true;
       } else {
         // the new jump is a default jump
@@ -357,7 +487,8 @@ Crafty.c("Kangaroo", {
       // (like for user-controlled jumps)
       if (this.playerControl || !this.currentPlayerJump) {
         this.playerControl = false;
-        this.playerControlledEnergy = this.yAtLiftOff - this.y; // remember the energy requested by the controlled jump
+        // remember the energy requested by the controlled jump
+        this.playerControlledEnergy = (this.yAtLiftOff - this.y) * this.weight;
         this.currentGravity *= GRAVITY_RATIO;
         this.gravityConst(this.currentGravity);
       }
@@ -370,7 +501,7 @@ Crafty.c("Kangaroo", {
         );
       }
     },
-  },
+  }, // end of events
   startJump: function(aTargetHeight) {
       // introduce some randomness in the jump height
       randomFactor =
@@ -405,7 +536,7 @@ Crafty.c("Kangaroo", {
       if ( new Date().getTime() - this.timeAtLiftOff <= ACCEPTANCE_DELAY_AFTER_LIFTOFF){
         // the jump becomes a player jump
         this.currentPlayerJump = true;
-        this.currentTargetHeight = this.energy; // the target is relative to the liftoff altitude
+        this.currentTargetHeight = this.energy / this.weight; 
         this.playerControl = true; // start player-controlled jump
         altitudeFromLiftOff = (this.yAtLiftOff - this.y);
         this.startJump(this.currentTargetHeight - altitudeFromLiftOff);
@@ -441,6 +572,7 @@ Crafty.c("Kangaroo", {
 }); // end of Kangaroo component
 
 Crafty.bind("KeyDown", function (e) {
+  // test game actions
   if (DEBUG) {
     if (e.key == Crafty.keys.ADD) {
       // '+' in numeric keypad
@@ -457,6 +589,14 @@ Crafty.bind("KeyDown", function (e) {
       // mirror effect
       changeSpeed(-1.0);
       console.log("speed = ", speed);
+    } else if (e.key == Crafty.keys.PAGE_UP) {
+      // make lighter
+      Crafty("Kangaroo").weight /= 1.1;
+      console.log("weight = ", Crafty("Kangaroo").get(0).weight);
+    } else if (e.key == Crafty.keys.PAGE_DOWN) {
+      // make heavier
+      Crafty("Kangaroo").weight *= 1.1;
+      console.log("weight = ", Crafty("Kangaroo").get(0).weight);
     }
   }
 });
@@ -469,11 +609,18 @@ Crafty.bind("UpdateFrame", function (eventData) {
   if (eventData.frame % TRACE_FRAME_STEP == 0) {
     updateTraces();
   }
+
+  // populate the world
+  if (distance - distanceLastPopulate > POPULATE_WORLD_X_STEP){
+    distanceLastPopulate = distance;
+    populateWorld();
+  }
 });
 
 Crafty.scene("main", function () {
   startTime = new Date().getTime();
   distance = 0;
+  distanceLastPopulate = 0;
   speed = SPEED_START;
   drawWorld();
   drawLeftPanel();
