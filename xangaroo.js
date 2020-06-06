@@ -6,18 +6,23 @@ var DEBUG = true; // display debug info
 
 var WORLD_WIDTH = 600;
 var WORLD_HEIGHT = Math.round((WORLD_WIDTH / 16) * 9);
-var FLOOR_HEIGHT = 10;
+var FLOOR_HEIGHT = 50;
 var Y_FLOOR = WORLD_HEIGHT - FLOOR_HEIGHT;
-var BUSH_HEIGHT = 150;
+var BUSH_HEIGHT = 120;
 var FOOTER_HEIGHT = 100;
 var LEFT_MARGIN = 50;
 var CANVAS_WIDTH = LEFT_MARGIN + WORLD_WIDTH;
 var CANVAS_HEIGHT = WORLD_HEIGHT + FOOTER_HEIGHT;
 
 var COLOR_FLOOR = "sandybrown";
-var COLOR_BUSH =  "#f7b77a";
+var COLOR_BUSH =  "sandybrown"; //"#f7b77a";
 var COLOR_TRACES = "white";
 var COLOR_SKY = "skyblue";
+var COLOR_SCORPION = "black";
+var COLOR_CLOUD = "white";
+var COLOR_ROCK = "crimson";
+var COLOR_CACTUS = "forestgreen";
+var COLOR_KANGAROO = "darkorange";
 
 var SPEED_START = 60; // initial speed, in pixels/second
 var ENERGY_START = 25; // energy = height in pixels of the jump
@@ -35,11 +40,13 @@ var GRAVITY_RATIO = 5; // shape of the jump: gravity multiplication factor when 
 var TRACE_FRAME_STEP = 2; // number of frames between each trace update
 var TRACE_MAX_COUNT = 100; // max number of traces to remember
 var TRACE_SIZE = 2; // size of trace blocks
-var POPULATE_WORLD_X_STEP = 10; // pixel distance between two calls of populateWorld
+var POPULATE_WORLD_DISTANCE_STEP = 10; // pixel distance between two calls of populateWorld
+var PRE_POPULATE_DURATION = 60000; // milliseconds simulated in the past to prepopulate the world
 var DELAY_TO_DISAPPEAR = 5000; // milliseconds: delay to destroy a symbol after exiting the world on the left side, if depth=0. if depth >0: the delay will be longer
 
 var X_KANGAROO = CANVAS_WIDTH / 3;
-var Z_KANGAROO = 1; // a bit in front
+var Z_SYMBOLS_DEFAULT = 1;
+var Z_KANGAROO = 2; // a bit in front
 var Z_PANEL = 10; // in front, to hide objects behind
 
 var startTime;
@@ -51,36 +58,71 @@ var traces = []; // array of arrays of entities: trace of kangaroo(s)
 
 
 // ***********************************************
-// world automated generation
+// world inhabitants
 // ***********************************************
 var symbols = [
   {
     component: "cloud",
-    color : "white",
-    distanceMin : 0, // min distance to appear in the world */ 
+    color : COLOR_CLOUD,
     distanceIntervalMin : 0, // min pixel distance between two
     distanceIntervalMax : 500, // max pixel distance between two
     yMin : -20,
     yMax : 100,
-    depthAtYMin : 1, // depth 0 = front, visual speed = speed / (1 + depth) (for perspective)
+    depthAtYMin : 1, // depth 0 = front, visual speed = (speed + symbol.speed) / (1 + depth) (for perspective)
     depthAtYMax : 10,
-    z : 1,
-    onHit : function(hitData){changeSpeed(1.1)}, // do nothing
-    distanceLast : 0, // position of the last one generated
+    // default values: can be ommitted here:
+    // distanceMin : 0, // min distance to appear in the world */ 
+    // z : 1,
+    // speedMin : 0, // speed of the symbol (go leftwards) pixel/second
+    // speedMax : 0,
+    onHitOn : function(hitDatas){
+      onHitOnCloud(hitDatas);
+    },
+    onHitOff : function(componentName){
+      onHitOffCloud(componentName);
+    },
   },
   {
     component: "rock",
-    color : "crimson",
-    distanceMin : 0, // min distance to appear in the world */ 
+    color : COLOR_ROCK,
     distanceIntervalMin : 0, // min pixel distance between two
     distanceIntervalMax : 500, // max pixel distance between two
     yMin : 200,
-    yMax : 300,
+    yMax : WORLD_HEIGHT-10,
     depthAtYMin : 2, // depth 0 = front, visual speed = speed / (1 + depth) (for perspective)
+    depthAtYMax : -0.2, // negative depth = in front of the kangaroo
+    onHitOn : function(hitDatas){if (speed >40){ changeSpeed(1/1.1)}},
+  },
+  {
+    component: "scorpion",
+    color : COLOR_SCORPION,
+    distanceMin : 0, // min distance to appear in the world */ 
+    distanceIntervalMin : 0, // min pixel distance between two
+    distanceIntervalMax : 100, // max pixel distance between two
+    yMin : Y_FLOOR-10,
+    yMax : Y_FLOOR-10,
+    depthAtYMin : 0, // depth 0 = front, visual speed = speed / (1 + depth) (for perspective)
     depthAtYMax : 0,
-    z : 1,
-    onHit : function(hitData){changeSpeed(1/1.1)}, // do nothing
-    distanceLast : 0, // position of the last one generated
+    speedMin : 10,  // speed of the symbol (go leftwards) pixel/second
+    speedMax : 50,
+    onHitOn : function(hitDatas){hitDatas[0].obj.weight /= 1.1},
+  },
+  {
+    component: "bigCactus",
+    color : COLOR_CACTUS,
+    distanceMin : 0, // min distance to appear in the world */ 
+    distanceIntervalMin : 150, // min pixel distance between two
+    distanceIntervalMax : 1000, // max pixel distance between two
+    yMin : Y_FLOOR-10,
+    yMax : Y_FLOOR-10,
+    depthAtYMin : 0, // depth 0 = front, visual speed = speed / (1 + depth) (for perspective)
+    depthAtYMax : 0,
+    pattern : [
+      {x:0,y:0}, {x:0,y:-10}, {x:0,y:-20}, {x:0,y:-30}, {x:0,y:-40}, // stam
+      {x:-10,y:-10}, {x:-20,y:-10}, {x:-20,y:-20}, // left arm
+      {x:10,y:-30}, {x:20,y:-30}, {x:20,y:-40} // right arm
+    ],
+    onHitOn : function(hitDatas){hitDatas[0].obj.weight *= 1.1},
   }
 ]
 
@@ -136,7 +178,10 @@ function drawWorld() {
       h: 10,
       z: Z_KANGAROO,
     })
-    .color("orange");
+    .color(COLOR_KANGAROO);
+
+  // prepopulate the world (clouds, rocks...)
+  prePopulateWorld();
 }
 
 // draw left panel(energy level)
@@ -191,7 +236,7 @@ function drawLeftPanel() {
       kangarooEntity = Crafty("Kangaroo").get(0);
       if (kangarooEntity.playerControl) {
         currentJumpHeight = kangarooEntity.yAtLiftOff - kangarooEntity.y;
-        this.h = currentJumpHeight * kangarooEntity.weight; // = used energy
+        this.h = currentJumpHeight * kangarooEntity.weight; // = used energy: we need more energy when we are heavier
         this.y = Y_FLOOR - this.h;
       } else {
         // empty the control bar when we start going down
@@ -242,8 +287,7 @@ function calculateJump(aHeight, aDistance) {
 /** change speed of game, by a multiplication factor.
  *  I don't use an absolute value because elements in the background (trees, clouds)
  *  have a smaller speed. The further back the slower, to convey a perspective feeling.
- * multiplier: 
- * @param aSpeedMultiplier if >1: accelerate <1: decelerate  -1: mirror (useful if we hit
+  * @param aSpeedMultiplier if >1: accelerate <1: decelerate  -1: mirror (useful if we hit
  * a wall or a big rock)
  */
 function changeSpeed(aSpeedMultiplier) {
@@ -309,15 +353,28 @@ function updateTraces() {
   }
 }
 
+/** Check if a symbol is too far left outside of the world, and must be destroyed 
+ * @param x the x position
+ * @param avx the horizontal velocity (typically negative)
+*/
+function isTooFarOutOfWorld(ax, avx){
+  return (ax < LEFT_MARGIN - Math.abs(avx)*(DELAY_TO_DISAPPEAR/1000));
+}
+
 /** Populate the world automatically with some randomness
  * 
  */
 function populateWorld(){
   symbols.forEach(function(symbol){
     // randomly decide if we create a new symbol
-    // we must have reached at least the min distance
-    if ( distance >= symbol.distanceMin ){
+    // we must have reached at least the min distance, if specified
+    if (!("distanceMin" in symbol) || distance >= symbol.distanceMin ){
       // and be separated from the last one by at least a minimal interval
+      if (!("distanceLast" in symbol)){
+        // if no symbol of this kind yet created: pretend one was just created
+        // long enough ago
+        symbol.distanceLast = distance - symbol.distanceIntervalMin;
+      }
       distanceSinceLast = distance - symbol.distanceLast;
       if ( distanceSinceLast >= symbol.distanceIntervalMin){
         intervalLength = symbol.distanceIntervalMax  - symbol.distanceIntervalMin;
@@ -328,38 +385,119 @@ function populateWorld(){
         if (Math.random() <= probability){
           // give birth to a symbol!
           symbol.distanceLast = distance;
+          // random speed in the min.max range
+          if ("speedMin" in symbol && "speedMax" in symbol){
+            speedNewBorn = symbol.speedMin + Math.random()*(symbol.speedMax - symbol.speedMin);
+          } else {
+            speedNewBorn = 0; // by default fixed
+          }
+          // random y in the min.max range
           yNewBorn = symbol.yMin + Math.random()*(symbol.yMax - symbol.yMin);
-          depthNewBorn = symbol.depthAtYMin + 
-                         (yNewBorn - symbol.yMin)/(symbol.yMax - symbol.yMin) *
-                         (symbol.depthAtYMax - symbol.depthAtYMin);
-          Crafty.e("2D, Canvas, Color, Motion, Collision, " + symbol.component)
-          .attr({
-            x: CANVAS_WIDTH, // create at the right side of the world
-            y: yNewBorn,
-            z: symbol.z,
-            w: 10, // will be set by the sprite
-            h: 10, // will be set by the sprite
-            vx: - speed / ( 1+ depthNewBorn), // for perspective: further away is slower
-          })
-          .color(symbol.color)
-          .checkHits("Kangaroo")
-          .bind("HitOn", function(hitData){
-            symbol.onHit(hitData);
-            if(DEBUG){console.log("Hit a ", symbol.component);}
-          })
-          .bind("Move", function(e){
-            // destroy the entity if it has moved too far away on the left border
-            if (this.x < LEFT_MARGIN-Math.abs(this.vx)*(DELAY_TO_DISAPPEAR/1000)){
-              if(DEBUG){console.log("destroy a " + symbol.component + " at x = ", this.x);}
-              this.destroy();
+          // calculate depth in function of yNewBorn
+          if (symbol.yMax == symbol.yMin){
+            depthNewBorn = symbol.depthAtYMin;
+          } else {
+            depthNewBorn = symbol.depthAtYMin + 
+            (yNewBorn - symbol.yMin)/(symbol.yMax - symbol.yMin) *
+            (symbol.depthAtYMax - symbol.depthAtYMin);
+          }
+          // visual horizontal speed of the newBorn entity on the screen
+          vxNewBorn = - (speed + speedNewBorn) / ( 1+ depthNewBorn ); // for perspective: further away is slower
+          // calculate x position
+          if ("pattern" in symbol){
+            pattern = symbol.pattern;
+          } else {
+            // default pattern is a single element at relative position {x:0, y:0}
+            pattern = [{x:0,y:0}];
+          }
+          if (distance >= 0){
+            // calculate the min X offest of the pattern
+            xValues = []
+            pattern.forEach(function(subElement){
+              xValues.push(subElement.x);
+            })
+            patternMinX = Math.min.apply(null, xValues);
+            // create at the right side of the world, and even a bit further
+            // when a pattern is used which spans on the left side
+            xNewBorn = CANVAS_WIDTH - patternMinX; // patternMinX typically negative
+          } else {
+            // distance is negative, that means pre-populating the world
+            // assume a constane speed throughout the past
+            timeInThePast =  -distance / speed; // time in seconds, positive
+            xNewBorn = CANVAS_WIDTH + vxNewBorn*timeInThePast; // note that vx is negative 
+          }
+          // do not create the entity if it's too far out of the world on the left
+          if (isTooFarOutOfWorld(xNewBorn, vxNewBorn)){
+            if(DEBUG){console.log("Prepopulate: ", symbol.component,
+                    " too far left at x = ",xNewBorn," vx = ", vxNewBorn);
             }
-          })
+          } else {
+            // create a pattern of entities
+            // the pattern defines the relative positions of repeated elements of the same kind
+            pattern.forEach(function(subElement){
+              Crafty.e("2D, Canvas, Color, Motion, Collision, " + symbol.component)
+              .attr({
+                x: xNewBorn + subElement.x,
+                y: yNewBorn + subElement.y,
+                z: (("z" in symbol)? symbol.z : Z_SYMBOLS_DEFAULT),
+                w: 10, // will be set by the sprite
+                h: 10, // will be set by the sprite
+                vx: vxNewBorn
+              })
+              .color(symbol.color)
+              .checkHits("Kangaroo")
+              .bind("HitOn", function(hitDatas){
+                if(DEBUG&&0){console.log("Hit a ", symbol.component);}
+                if ("onHitOn" in symbol ){
+                  symbol.onHitOn(hitDatas);
+                }
+              })
+              .bind("HitOff", function(componentName){
+                if(DEBUG&00){console.log("Quit a ", componentName);}
+                if ("onHitOff" in symbol){
+                  symbol.onHitOff(componentName); // the hitoff returns no hitData, only the componentName
+                }
+              })
+              .bind("Move", function(e){
+                // destroy the entity if it has moved too far away on the left border
+                if (isTooFarOutOfWorld(this.x, this.vx)){
+                  if(DEBUG&&0){console.log("destroy a " + symbol.component + " at x = ", this.x);}
+                  this.destroy();
+                }
+              }); // end of chained calls from Crafty.e()
+            });
+          }
         }
       }
     }
-  })
+  }); // forEach
 }
 
+// prepopulate the world (clouds and rocks typically) before starting the game
+// simulates a certain play duration in the past
+function prePopulateWorld(){
+  distancePrev = distance;
+  // initialise the distance in the past
+  distanceBackInTime = -speed * (PRE_POPULATE_DURATION/1000);
+  // Loop from the distance in the past until the start (at distance=0)
+  for (distance = distanceBackInTime; distance < 0; distance+= POPULATE_WORLD_DISTANCE_STEP){
+    // the function populateWorld has special management if distance is negative
+    populateWorld();
+  }
+  // restore the previous distance (normally zero)
+  distance = distancePrev;
+}
+
+// action on hitting a cloud
+function onHitOnCloud(aHitDatas){
+  entityHit = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
+  entityHit.antigravity(); // fly !
+}
+
+// action on quitting a cloud
+function onHitOffCloud(componentName){
+  Crafty("Kangaroo").get(0).gravity(); // start falling again
+}
 
 // ***********************************************
 // game logic
@@ -370,7 +508,6 @@ Crafty.c("Kangaroo", {
   init: function () {
     // exported properties
     // We could also really use "properties", but that seems overkill
-    this.weight = 1.0; // weight <1: lighter: will jump higher >1: heavier
     this.yAtLiftOff = Y_FLOOR; // y when last jump was started
     this.timeAtLiftOff = 0; // time of last jump start
     this.yPrevious = Y_FLOOR; // y at the previous frame
@@ -390,6 +527,41 @@ Crafty.c("Kangaroo", {
     this.gravity("Floor");
     this.preventGroundTunneling(true); // Prevent entity from falling through thin ground entities at high speeds.
   },
+
+  properties: {
+    // weight <1: lighter: will jump higher; >1: heavier
+    // we use a property to take action when hitting an object that impacts the weight
+    // public value
+    weight : {
+      set: function(value){
+        if (value < 0){
+          // safety check: weight must be >= 0
+        }
+        else if (value == 0) {
+          // become gravity free!
+          // do not change the cached gravity nor weight: will be needed when we resume falling!
+          this.antigravity();
+        } else {
+          // when the weight is changed, we change the gravity to simulate being heavier/lighter
+          this.currentGravity *= (value / this._weight);
+          this._weight = value;   // update the private variable
+          this.gravity(); // re-enable gravity if it was stopped by antigravity       
+          this.gravityConst(this.currentGravity);
+        }
+      },
+
+      get: function() {
+        return this._weight;
+      }
+    },
+    // private cached value
+    _weight:{
+      value : 1.0, // initial value
+      writable: true,
+    }
+
+  },
+
   events: {
     KeyDown: function (e) {
       if (e.key == Crafty.keys.SPACE || e.key == Crafty.keys.UP_ARROW) {
@@ -420,7 +592,7 @@ Crafty.c("Kangaroo", {
       );
     },
     Rebounce: function (aEntity) {
-      this.color("orange");
+      this.color(COLOR_KANGAROO);
       // check if the player requested a jump within the acceptance window
       this.currentPlayerJump = false;
       if (this.playerJumpRequestLatched) {
@@ -437,8 +609,9 @@ Crafty.c("Kangaroo", {
       // Make a new jump (rebounce)
       if (this.currentPlayerJump) {
         // the new jump is requested by the player
-        // use the full energy reserve at start of jump
-        this.currentTargetHeight = this.energy / this.weight; 
+        // use the full energy reserve at start of jump, divided by the weigth
+        // (if we are heavier, we'll not jump as high)
+        this.currentTargetHeight = this.energy / this.weight;
         this.playerControl = true;
       } else {
         // the new jump is a default jump
@@ -482,17 +655,9 @@ Crafty.c("Kangaroo", {
           "[ms]"
         );
       } 
-      // stop player jump request (if not yet stopped by the player)
-      // and in case of default jump: apply the heavier gravity also
-      // (like for user-controlled jumps)
-      if (this.playerControl || !this.currentPlayerJump) {
-        this.playerControl = false;
-        // remember the energy requested by the controlled jump
-        this.playerControlledEnergy = (this.yAtLiftOff - this.y) * this.weight;
-        this.currentGravity *= GRAVITY_RATIO;
-        this.gravityConst(this.currentGravity);
-      }
-      // remove the used energy, in case of user jump
+      // stop jump 
+      this.stopJump();
+      // remove the used energy, in case of player jump
       // and keep at least enough energy for a default jump
       if (this.currentPlayerJump) {
         this.energy = Math.max(
@@ -511,12 +676,25 @@ Crafty.c("Kangaroo", {
       heightOfJump = aTargetHeight * randomFactor;
       distanceOfJump = heightOfJump / JUMP_RATIO;
       [initialJumpSpeed, gravity] = calculateJump(heightOfJump, distanceOfJump);
+      if(DEBUG){console.log("initialJumpSpeed: ", initialJumpSpeed, " gravity: ", gravity);}
       this.currentJumpSpeed = initialJumpSpeed;
       this.currentGravity = gravity;
       this.gravityConst(gravity);
       this.jumpSpeed(this.currentJumpSpeed);
       // and now: jump !
       this.jump();
+  },
+  stopJump: function(){
+      // in case of player-controlled jump: stop the control
+      if (this.playerControl){
+        this.playerControl = false;
+        // remember the energy requested by the controlled jump, to remove it later,
+        // typically when we reach the peak
+        this.playerControlledEnergy = (this.yAtLiftOff - this.y) * this.weight;
+      }
+      // and start falling down by increasing the gravity
+      this.currentGravity *= GRAVITY_RATIO;
+      this.gravityConst(this.currentGravity);
   },
   checkPeakReached: function () {
     // Check if we reached the peak and start going down
@@ -534,12 +712,19 @@ Crafty.c("Kangaroo", {
     // and if yes adapt the jump (double-jump)
     if (this.goingUp && !this.currentPlayerJump){
       if ( new Date().getTime() - this.timeAtLiftOff <= ACCEPTANCE_DELAY_AFTER_LIFTOFF){
-        // the jump becomes a player jump
-        this.currentPlayerJump = true;
-        this.currentTargetHeight = this.energy / this.weight; 
-        this.playerControl = true; // start player-controlled jump
+        // start jumping only if the target is higher than where we are now !
+        // if the weight is heavy it could be that the target is lower
         altitudeFromLiftOff = (this.yAtLiftOff - this.y);
-        this.startJump(this.currentTargetHeight - altitudeFromLiftOff);
+        newTargetAltitude = this.energy / this.weight;
+        if (newTargetAltitude > altitudeFromLiftOff){
+          // the jump becomes a player jump
+          this.currentPlayerJump = true;
+          // start player-controlled jump
+          this.playerControl = true;
+          // and "re-jump" towards the new target
+          this.currentTargetHeight = newTargetAltitude; 
+          this.startJump(this.currentTargetHeight - altitudeFromLiftOff);
+        }
       }
     }
     // if we are still in the falling phase (not yet landed),
@@ -557,14 +742,8 @@ Crafty.c("Kangaroo", {
     if (this.playerJumpRequestLatched) {
       this.playerJumpRequestLatched = false;
     }
-    // if we are in a player-controlled jump: stop the jump
-    // and start falling down by increasing the gravity
-    if (this.playerControl) {
-      this.playerControl = false;
-      this.playerControlledEnergy = this.yAtLiftOff - this.y; // remember the energy requested by the controlled jump
-      this.currentGravity *= GRAVITY_RATIO;
-      this.gravityConst(this.currentGravity);
-    }
+    // then effectively stop the jump
+    this.stopJump();
   },
   triggerRebounce: function () {
     Crafty.trigger("Rebounce", this);
@@ -595,7 +774,11 @@ Crafty.bind("KeyDown", function (e) {
       console.log("weight = ", Crafty("Kangaroo").get(0).weight);
     } else if (e.key == Crafty.keys.PAGE_DOWN) {
       // make heavier
-      Crafty("Kangaroo").weight *= 1.1;
+      if (Crafty("Kangaroo").get(0).weight == 0){
+        Crafty("Kangaroo").get(0).weight = 0.1;
+      } else {
+        Crafty("Kangaroo").weight *= 1.1;
+      }
       console.log("weight = ", Crafty("Kangaroo").get(0).weight);
     }
   }
@@ -611,7 +794,7 @@ Crafty.bind("UpdateFrame", function (eventData) {
   }
 
   // populate the world
-  if (distance - distanceLastPopulate > POPULATE_WORLD_X_STEP){
+  if (distance - distanceLastPopulate > POPULATE_WORLD_DISTANCE_STEP){
     distanceLastPopulate = distance;
     populateWorld();
   }
@@ -620,7 +803,7 @@ Crafty.bind("UpdateFrame", function (eventData) {
 Crafty.scene("main", function () {
   startTime = new Date().getTime();
   distance = 0;
-  distanceLastPopulate = 0;
+  distanceLastPopulate = distance;
   speed = SPEED_START;
   drawWorld();
   drawLeftPanel();
