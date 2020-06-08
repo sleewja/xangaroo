@@ -55,7 +55,7 @@ var X_KANGAROO = CANVAS_WIDTH / 3;
 // z>0 is in front of the kangaroo. z increases as we go in front towards the viewer
 var Z_BACKGROUND = -1000; // in the background, objects are fixed, their visual speed is 0
 var Z_SYMBOLS_DEFAULT = 0; // at z=0: visual speed = speed
-var Z_KANGAROO = 1; // use Z=1 and not zero, to be in front of symbols
+var Z_KANGAROO = 1; // use Z=1 and not zero, to be in front of symbols We should not put anything else in this Z plane
 var Z_OBSERVER = 100; // at Z_OBSERVER the visual speed is infinite
 var Z_PANEL = 1000; // in front, to hide objects behind
 
@@ -76,8 +76,8 @@ var symbols = [
     components: ["Cloud"],
     color: COLOR_CLOUD,
     // distanceFirst : 0,  if omitted: means that it will be pre-populated
-    //distanceIntervalMin: 0, // min pixel distance between two    if omitted: no repetition
-    //distanceIntervalMax: 200, // max pixel distance between two  if omitted: no repetition
+    distanceIntervalMin: 0, // min pixel distance between two    if omitted: no repetition
+    distanceIntervalMax: 200, // max pixel distance between two  if omitted: no repetition
     yMin: -20,
     yMax: 100,
     zAtYMin: -10, // if omitted: Z_SYMBOLS_DEFAULT
@@ -113,8 +113,8 @@ var symbols = [
     distanceIntervalMax: 100, // max pixel distance between two
     yMin: Y_FLOOR - 10,
     yMax: Y_FLOOR - 10,
-    speedMin: 10, // speed of the symbol in pixel/second. >0 means go leftwards
-    speedMax: 50,
+    speedMin: -50, // speed of the symbol in pixel/second. <0 means go leftwards
+    speedMax: -10,
     onHitOn: function (hitDatas) {
       //hitDatas[0].obj.weight /= 1.1;
     },
@@ -410,12 +410,23 @@ function calculateVisualSpeed(aSpeed, aZ) {
  * a wall or a big rock)
  */
 function changeSpeed(aSpeedMultiplier) {
+  prevSpeed = speed;
   speed *= aSpeedMultiplier;
-  // adapt the speed of all "Motion" components
+  // adapt the speed of all "Motion" components, except the Kangaroo,
+  // which stays in place!
   Crafty("Motion")
     .get()
     .forEach(function (entity) {
-      entity.vx *= aSpeedMultiplier;
+      if (!entity.has("Kangaroo")){
+        // visual speed of the entity if it was fixed:
+        visualSpeedIfEntityFixed = calculateVisualSpeed(-prevSpeed, entity.z);
+        // deduce the absolute horizontal speed of the entity
+        // visual speed = visualSpeedIfEntityFixed + visualSpeedIfObserverFixed
+        visualSpeedIfObserverFixed = entity.vx - visualSpeedIfEntityFixed
+        // and recalculate the new visual speed (vx)
+        // only the observer's part is multiplied
+        entity.vx = aSpeedMultiplier*visualSpeedIfEntityFixed + visualSpeedIfObserverFixed;
+      }
     });
 }
 
@@ -514,10 +525,10 @@ function createSymbol(aSymbol, aDistance){
     }
   }
   // visual horizontal speed of the newBorn entity on the screen
-  // speed = kangaroo speed = observer's speed
-  // speedNewBorn = absolute horizontal speed of the newborn, by default leftwards
+  // speed = kangaroo speed = observer's speed: if >0: make the world move leftwards
+  // speedNewBorn = absolute horizontal speed of the newborn (>0 means rightwards)
   // for perspective: further away is slower
-  vxNewBorn = calculateVisualSpeed(-(speed + speedNewBorn), zNewBorn);
+  vxNewBorn = calculateVisualSpeed(-speed + speedNewBorn, zNewBorn);
   // calculate x position
   // select a pattern in the list of patterns, if it is available
   // if no list is given, then take a default pattern: only one symbol
