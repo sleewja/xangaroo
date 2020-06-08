@@ -74,16 +74,14 @@ var symbols = [
   {
     components: ["Cloud"],
     color: COLOR_CLOUD,
-    distanceIntervalMin: 0, // min pixel distance between two
-    distanceIntervalMax: 500, // max pixel distance between two
+    // distanceFirst : 0,  if omitted: means that it will be pre-populated
+    distanceIntervalMin: 0, // min pixel distance between two    if omitted: no repetition
+    distanceIntervalMax: 200, // max pixel distance between two  if omitted: no repetition
     yMin: -20,
     yMax: 100,
-    zAtYMin: -10,
-    zAtYMax: -990,
-    // default values: can be ommitted here:
-    // distanceMin : 0, // min distance to appear in the world
-    // speedMin : 0, // speed of the symbol (go leftwards) pixel/second
-    // speedMax : 0,
+    zAtYMin: -10, // if omitted: Z_SYMBOLS_DEFAULT
+    zAtYMax: -990,// if omitted: Z_SYMBOLS_DEFAULT
+    // patterns: [[{x:0, y:0}]] default pattern: can be omitted
     onHitOn: function (hitDatas) {
       onHitOnCloud(hitDatas);
     },
@@ -95,21 +93,21 @@ var symbols = [
     components: ["Rock", "Floor"], // Floor = support for gravity
     color: COLOR_ROCK,
     distanceIntervalMin: 0, // min pixel distance between two
-    distanceIntervalMax: 500, // max pixel distance between two
+    distanceIntervalMax: 200, // max pixel distance between two
     yMin: 200,
     yMax: WORLD_HEIGHT - 10,
     zAtYMin: -500,
     zAtYMax: 20, // positive: in front of the kangaroo
     onHitOn: function (hitDatas) {
-      if (speed > 40) {
-        changeSpeed(1 / 1.1);
-      }
+      //if (speed > 40) {
+      //  changeSpeed(1 / 1.1);
+      // }
     },
   },
   {
-    components: ["Scorpion", "Floor"],
+    components: ["Scorpion"],
     color: COLOR_SCORPION,
-    distanceMin: 0, // min distance to appear in the world
+    distanceFirst: 0, // first distance to appear in the world
     distanceIntervalMin: 0, // min pixel distance between two
     distanceIntervalMax: 100, // max pixel distance between two
     yMin: Y_FLOOR - 10,
@@ -123,9 +121,9 @@ var symbols = [
   {
     components: ["Cactus"],
     color: COLOR_CACTUS,
-    distanceMin: 0, // min distance to appear in the world
+    distanceFirst: 0, // first distance to appear in the world
     distanceIntervalMin: 150, // min pixel distance between two
-    distanceIntervalMax: 1000, // max pixel distance between two
+    distanceIntervalMax: 600, // max pixel distance between two
     yMin: Y_FLOOR - 10,
     yMax: Y_FLOOR - 10,
     patterns: [
@@ -162,7 +160,10 @@ var symbols = [
   {
     components: ["Message"],
     color: COLOR_MESSAGE,
-    distanceReveal: 1000, // the message will become aligned at this distance
+    
+    distanceFirst: 1000, // 1st distance where the message is aligned
+    distanceIntervalMin: 2000, // if this key is absent: it means the symbol appears only once
+    distanceIntervalMax: 2000, // if this key is absent: it means the symbol appears only once
     xReveal: LEFT_MARGIN + 10, // bounding rectangle of message in the sky at the moment it is aligned
     wReveal: WORLD_WIDTH - 30, // width
     yTop: 10,     
@@ -181,7 +182,7 @@ var symbols = [
   {
     components: ["Message"],
     color: "red",
-    distanceReveal: 3000, // the message will become aligned at this distance
+    distanceFirst: 3000, // the message will become aligned at this distance
     xReveal: LEFT_MARGIN + WORLD_WIDTH/2 - 50, // bounding rectangle of message in the sky at the moment it is aligned
     wReveal: 50, // width
     yTop: 10,     
@@ -211,7 +212,7 @@ Crafty.init(CANVAS_WIDTH, CANVAS_HEIGHT, document.getElementById("xangaroo"));
 // draw initial world
 function drawWorld() {
   // floor
-  Crafty.e("Floor, 2D, Canvas, Color")
+  Crafty.e("2D, Canvas, Color, Floor")
     .attr({
       x: LEFT_MARGIN,
       y: Y_FLOOR,
@@ -244,7 +245,7 @@ function drawWorld() {
     .color(COLOR_SKY);
 
   // Add kangaroo player
-  Crafty.e("2D, DOM, Color, Kangaroo")
+  Crafty.e("2D, Canvas, Color, Kangaroo")
     .attr({
       x: X_KANGAROO,
       y: Y_FLOOR - 20, // dropped from a bit above the floor to start rebouncing
@@ -326,18 +327,15 @@ function drawLeftPanel() {
 function drawFooter() {
   // demo text
   if (DEBUG) {
-    Crafty.e("2D, Text")
+    Crafty.e("2D, Canvas, Text")
       .attr({
-        x: 0,
-        y: CANVAS_HEIGHT - 40,
+        x: CANVAS_WIDTH - 100,
+        y: CANVAS_HEIGHT - FOOTER_HEIGHT+10,
         w: 100,
       })
       .text(function () {
         return (
-          "energy reserve: " +
-          Crafty("Kangaroo").get(0).energyReserve +
-          "\nfor next jump: " +
-          Crafty("Kangaroo").get(0).energyForNextJump
+          "distance:" + Math.round(distance).toString() 
         );
       })
       .dynamicTextGeneration(true)
@@ -363,21 +361,24 @@ function calculateJump(aHeight, aDistance) {
  * @param aZ the z value, z<0 means further away
  */
 function calculateVisualSpeed(aSpeed, aZ) {
-  // the visual speed of an object depends on its z value:
-  // linear formula by considering that:
-  // - the visual speed at z=0 is speed
-  // - the visual speed at z=Z_BACKGROUND is zero
-  //   visual speed = speed * ( z - Z_BACKGROUND)/(-Z_BACKGROUND) (for perspective)
-  //return (aSpeed * (aZ - Z_BACKGROUND)/(-Z_BACKGROUND));
-
-  // other approach (gives nicer results, to my taste)
-  // - the visual speed at z=0 is speed
-  // - the visual speed at z=-infinite is zero -> we simplify: if z <= Z_BACKGROUND: speed = 0
-  // - the visual speed at z=Z_OBSERVER is infinite
-  if (aZ <= Z_BACKGROUND) {
-    visualSpeed = 0;
-  } else {
-    visualSpeed = aSpeed / (1 - aZ / Z_OBSERVER);
+  method = "linear"; //"linear" or "inverse";
+  if (method == "linear"){
+    // the visual speed of an object depends on its z value:
+    // linear formula by considering that:
+    // - the visual speed at z=0 is speed
+    // - the visual speed at z=Z_BACKGROUND is zero
+    //   visual speed = speed * ( z - Z_BACKGROUND)/(-Z_BACKGROUND) (for perspective)
+    visualSpeed = (aSpeed * (aZ - Z_BACKGROUND)/(-Z_BACKGROUND));
+  } else if (mehtod == "inverse"){
+    // other approach
+    // - the visual speed at z=0 is speed
+    // - the visual speed at z=-infinite is zero -> we simplify: if z <= Z_BACKGROUND: speed = 0
+    // - the visual speed at z=Z_OBSERVER is infinite
+    if (aZ <= Z_BACKGROUND) {
+      visualSpeed = 0;
+    } else {
+      visualSpeed = aSpeed / (1 - aZ / Z_OBSERVER);
+    }
   }
   return visualSpeed;
 }
@@ -459,222 +460,270 @@ function isTooFarOutOfWorld(ax, avx) {
   return ax < LEFT_MARGIN - Math.abs(avx) * (DELAY_TO_DISAPPEAR / 1000);
 }
 
-/** Populate the world automatically with some randomness
+
+/** Create the given symbol at the specified distance 
+ * @param aSymbol: the symbol to create
+ * @param aDistance: the distance travelled so far. A negative distance means pre-populating
+*/
+function createSymbol(aSymbol, aDistance){
+  // random speed in the min.max range
+  if ("speedMin" in aSymbol && "speedMax" in aSymbol) {
+    speedNewBorn =
+      aSymbol.speedMin +
+      Math.random() * (aSymbol.speedMax - aSymbol.speedMin);
+  } else {
+    speedNewBorn = 0; // by default fixed
+  }
+  // random y in the min.max range
+  yNewBorn =
+  aSymbol.yMin + Math.random() * (aSymbol.yMax - aSymbol.yMin);
+  // calculate z value
+  // if no z info is provided, use default value
+  if (!("zAtYMin" in aSymbol) || !("zAtYMax" in aSymbol)) {
+    zNewBorn = Z_SYMBOLS_DEFAULT;
+  } else {
+    // calculate z in function of yNewBorn
+    if (aSymbol.yMax == aSymbol.yMin) {
+      zNewBorn = aSymbol.zAtYMin;
+    } else {
+      zNewBorn = Math.round(
+        aSymbol.zAtYMin +
+          ((yNewBorn - aSymbol.yMin) / (aSymbol.yMax - aSymbol.yMin)) *
+            (aSymbol.zAtYMax - aSymbol.zAtYMin)
+      );
+    }
+  }
+  // visual horizontal speed of the newBorn entity on the screen
+  // speed = kangaroo speed = observer's speed
+  // speedNewBorn = absolute horizontal speed of the newborn, by default leftwards
+  // for perspective: further away is slower
+  vxNewBorn = calculateVisualSpeed(-(speed + speedNewBorn), zNewBorn);
+  // calculate x position
+  // select a pattern in the list of patterns, if it is available
+  // if no list is given, then take a default pattern: only one symbol
+  if ("patterns" in aSymbol) {
+    // randomly pick a pattern in the list
+    pattern =
+    aSymbol.patterns[
+        Math.floor(Math.random() * aSymbol.patterns.length)
+      ];
+  } else {
+    // default pattern is a single element at relative position {x:0, y:0}
+    pattern = [{ x: 0, y: 0 }];
+  }
+  // calculate the min X offest of the pattern
+  xValues = [];
+  pattern.forEach(function (subElement) {
+    xValues.push(subElement.x);
+  });
+  patternMinX = Math.min.apply(null, xValues);
+  // create at the right side of the world, and even a bit further
+  // when a pattern is used which spans on the left side
+  xNewBorn = CANVAS_WIDTH - patternMinX; // patternMinX typically negative
+  if (aDistance < 0){
+    // aDistance is negative, that means pre-populating the world
+    // assume a constant speed throughout the past
+    timeInThePast = -aDistance / speed; // time in seconds, positive
+    xNewBorn += vxNewBorn * timeInThePast; // note that vx is negative
+  }
+  // do not create the entity if it's too far out of the world on the left
+  if (isTooFarOutOfWorld(xNewBorn, vxNewBorn)) {
+    if (DEBUG && 0) {
+      console.log(
+        "Prepopulate: ",
+        aSymbol.components,
+        " too far left at x = ",
+        xNewBorn,
+        " vx = ",
+        vxNewBorn
+      );
+    }
+  } else {
+    // create a pattern of entities
+    // the pattern defines the relative positions of repeated elements of the same kind
+    pattern.forEach(function (subElement) {
+      Crafty.e(
+        "2D, Canvas, Color, Motion, Collision, " +
+        aSymbol.components.join()
+      )
+        .attr({
+          x: xNewBorn + subElement.x,
+          y: yNewBorn + subElement.y,
+          z: zNewBorn,
+          w: 10, // will be set by the sprite
+          h: 10, // will be set by the sprite
+          vx: vxNewBorn,
+        })
+        .color(aSymbol.color)
+        .checkHits("Kangaroo")
+        .bind("HitOn", function (hitDatas) {
+          if (DEBUG && 0) {
+            console.log("Hit a ", aSymbol.component);
+          }
+          if ("onHitOn" in aSymbol) {
+            aSymbol.onHitOn(hitDatas);
+          }
+        })
+        .bind("HitOff", function (componentName) {
+          if (DEBUG & 00) {
+            console.log("Quit a ", componentName);
+          }
+          if ("onHitOff" in aSymbol) {
+            aSymbol.onHitOff(componentName); // the hitoff returns no hitData, only the componentName
+          }
+        })
+        .bind("Move", function (e) {
+          // destroy the entity if it has moved too far away on the left border
+          if (isTooFarOutOfWorld(this.x, this.vx)) {
+            if (DEBUG && 0) {
+              console.log(
+                "destroy a " + aSymbol.component + " at x = ",
+                this.x
+              );
+            }
+            this.destroy();
+          }
+        }); // end of chained calls from Crafty.e()
+    });
+  }
+}
+
+/** Populate the world automatically with some randomness:
+ *  give birth to some symbols at the current distance
  *
  */
 function populateWorld() {
   symbols.forEach(function (symbol) {
-    if (!("message" in symbol)) {
-      // messages are not managed here
-      // randomly decide if we create a new symbol
-      // we must have reached at least the min distance, if specified
-      if (!("distanceMin" in symbol) || distance >= symbol.distanceMin) {
-        // and be separated from the last one by at least a minimal interval
-        if (!("distanceLast" in symbol)) {
-          // if no symbol of this kind yet created: create the field "distanceLast"
-          // and pretend one was just created long enough ago
-          symbol.distanceLast = distance - symbol.distanceIntervalMin;
-        }
-        distanceSinceLast = distance - symbol.distanceLast;
-        if (distanceSinceLast >= symbol.distanceIntervalMin) {
-          intervalLength =
-            symbol.distanceIntervalMax - symbol.distanceIntervalMin;
-          distanceTillEndOfInterval =
-            symbol.distanceIntervalMax - distanceSinceLast;
-          // the probability to generate a symbol increases as we progress in the interval,
-          // if the symbol has not yet been generated
-          probability = 1 - distanceTillEndOfInterval / intervalLength;
-          if (Math.random() <= probability) {
-            // give birth to a symbol!
-            symbol.distanceLast = distance;
-            // random speed in the min.max range
-            if ("speedMin" in symbol && "speedMax" in symbol) {
-              speedNewBorn =
-                symbol.speedMin +
-                Math.random() * (symbol.speedMax - symbol.speedMin);
-            } else {
-              speedNewBorn = 0; // by default fixed
-            }
-            // random y in the min.max range
-            yNewBorn =
-              symbol.yMin + Math.random() * (symbol.yMax - symbol.yMin);
-            // calculate z value
-            // if no z info is provided, used default value
-            if (!("zAtYMin" in symbol) || !("zAtYMax" in symbol)) {
-              zNewBorn = Z_SYMBOLS_DEFAULT;
-            } else {
-              // calculate z in function of yNewBorn
-              if (symbol.yMax == symbol.yMin) {
-                zNewBorn = symbol.zAtYMin;
-              } else {
-                zNewBorn = Math.round(
-                  symbol.zAtYMin +
-                    ((yNewBorn - symbol.yMin) / (symbol.yMax - symbol.yMin)) *
-                      (symbol.zAtYMax - symbol.zAtYMin)
-                );
-              }
-            }
-            // visual horizontal speed of the newBorn entity on the screen
-            // speed = kangaroo speed = observer's speed
-            // speedNewBorn = absolute horizontal speed of the newborn, by default leftwards
-            // for perspective: further away is slower
-            vxNewBorn = calculateVisualSpeed(-(speed + speedNewBorn), zNewBorn);
-            // calculate x position
-            // select a pattern in the list of patterns, if it is available
-            // if no list is given, then take a default pattern: only one symbol
-            if ("patterns" in symbol) {
-              // randomly pick a pattern in the list
-              pattern =
-                symbol.patterns[
-                  Math.floor(Math.random() * symbol.patterns.length)
-                ];
-            } else {
-              // default pattern is a single element at relative position {x:0, y:0}
-              pattern = [{ x: 0, y: 0 }];
-            }
-            if (distance >= 0) {
-              // calculate the min X offest of the pattern
-              xValues = [];
-              pattern.forEach(function (subElement) {
-                xValues.push(subElement.x);
-              });
-              patternMinX = Math.min.apply(null, xValues);
-              // create at the right side of the world, and even a bit further
-              // when a pattern is used which spans on the left side
-              xNewBorn = CANVAS_WIDTH - patternMinX; // patternMinX typically negative
-            } else {
-              // distance is negative, that means pre-populating the world
-              // assume a constant speed throughout the past
-              timeInThePast = -distance / speed; // time in seconds, positive
-              xNewBorn = CANVAS_WIDTH + vxNewBorn * timeInThePast; // note that vx is negative
-            }
-            // do not create the entity if it's too far out of the world on the left
-            if (isTooFarOutOfWorld(xNewBorn, vxNewBorn)) {
-              if (DEBUG && 0) {
-                console.log(
-                  "Prepopulate: ",
-                  symbol.components,
-                  " too far left at x = ",
-                  xNewBorn,
-                  " vx = ",
-                  vxNewBorn
-                );
-              }
-            } else {
-              // create a pattern of entities
-              // the pattern defines the relative positions of repeated elements of the same kind
-              pattern.forEach(function (subElement) {
-                Crafty.e(
-                  "2D, Canvas, Color, Motion, Collision, " +
-                    symbol.components.join()
-                )
-                  .attr({
-                    x: xNewBorn + subElement.x,
-                    y: yNewBorn + subElement.y,
-                    z: zNewBorn,
-                    w: 10, // will be set by the sprite
-                    h: 10, // will be set by the sprite
-                    vx: vxNewBorn,
-                  })
-                  .color(symbol.color)
-                  .checkHits("Kangaroo")
-                  .bind("HitOn", function (hitDatas) {
-                    if (DEBUG && 0) {
-                      console.log("Hit a ", symbol.component);
-                    }
-                    if ("onHitOn" in symbol) {
-                      symbol.onHitOn(hitDatas);
-                    }
-                  })
-                  .bind("HitOff", function (componentName) {
-                    if (DEBUG & 00) {
-                      console.log("Quit a ", componentName);
-                    }
-                    if ("onHitOff" in symbol) {
-                      symbol.onHitOff(componentName); // the hitoff returns no hitData, only the componentName
-                    }
-                  })
-                  .bind("Move", function (e) {
-                    // destroy the entity if it has moved too far away on the left border
-                    if (isTooFarOutOfWorld(this.x, this.vx)) {
-                      if (DEBUG && 0) {
-                        console.log(
-                          "destroy a " + symbol.component + " at x = ",
-                          this.x
-                        );
-                      }
-                      this.destroy();
-                    }
-                  }); // end of chained calls from Crafty.e()
-              });
-            }
-          }
-        }
+    // set default values for distanceFirst if omitted
+    if (!("distanceFirst" in symbol)){
+        // immediately schedule the first one at the current distance
+        symbol.distanceFirst = distance;
+    }
+    // we must have reached at least the distance of the next scheduled one
+    // but if none schedule yet, schedule it for distanceFirst,
+    if (!("distanceNext" in symbol)){
+      // it's the first one generated, initialise some dynamic fields
+      symbol.continue = true;
+      symbol.distanceNext = symbol.distanceFirst;
+      if ("message" in symbol){
+        // for a message, the distance of birth is the distance where the slowest 
+        // cell enters in the Canvas. At this stage, distanceNext represents the
+        // next distance where the messgae will be revealed. We need to substract
+        // the message expansion to know when the slowest element appears on 
+        // screen.
+        symbol.distanceNext -= calculateMessageExpansion(symbol);
+      }
+    }
+    // now effectively check that we have reached the next scheduled distance,
+    // provided we stll have to continue giving birth to symbols of this kind
+    if (symbol.continue && distance >= symbol.distanceNext) {
+      if (!("message" in symbol)){
+        // Determine all characteristics of the newBorn, and create it
+        createSymbol(symbol, distance);
+      } else {
+        createMessage(symbol, distance);
+      }
+      // if no interval info is specified: do not schedule a next one
+      if (!("distanceIntervalMin" in symbol)){
+        symbol.continue = false;
+      } else {
+        // Schedule the next birth of the same kind, within the specified
+        // interval range
+        symbol.distanceNext += (symbol.distanceIntervalMin +
+        Math.random()*(symbol.distanceIntervalMax - symbol.distanceIntervalMin));
       }
     }
   }); // forEach
 }
 
-// create the messages in the future, to have them aligned at the required distance
-function populateMessages() {
-  symbols.forEach(function (symbol) {
-    if ("message" in symbol) {
-      numRows = symbol.message.length; // number of rows
-      numColumns = symbol.message[0].length; // length of string
-      for (row = 0; row < numRows; row++) {
-        // calculate the y position when the message is revealed (aligned)
-        yCell = symbol.yTop + (symbol.yBottom - symbol.yTop) * (row / (numRows - 1));
-        for (col = 0; col < numColumns; col++) {
-          // create a cell only if the character is not "space"
-          if (symbol.message[row].charAt(col) != ' '){
-          // calculate the x position when the message is revealed (aligned)
-          xCellReveal = symbol.xReveal + symbol.wReveal * (col / (numColumns - 1));
-          // calculate the z value in function of y, with some randomness added
-          // otherwise the horizontal lines will be too obviously visible
-          randomFactor =
-            1 -
-            MESSAGE_Z_RANDOMNESS_PERCENT / 100 +
-            Math.random() * ((2 * MESSAGE_Z_RANDOMNESS_PERCENT) / 100);
-          zCell = Math.round(
-            randomFactor *
-              (symbol.zTop +
-                ((yCell - symbol.yTop) / (symbol.yBottom - symbol.yTop)) *
-                  (symbol.zBottom - symbol.zTop))
-          );
-          // Now compute the x position at time=0, to get the message
-          // aligned at the requested distance
-          timeToReveal = symbol.distanceReveal / speed;
-          speedCell = calculateVisualSpeed(speed,zCell);
-          xCell = xCellReveal + timeToReveal * speedCell;
-          // Now we know all we need to create the entity
-          Crafty.e("2D, Canvas, Color, Motion, Collision, " +
-            symbol.components.join())
-            .attr({
-              x: xCell,
-              y: yCell,
-              z: zCell,
-              w: 10, // will be set by the sprite
-              h: 10, // will be set by the sprite
-              vx: -speedCell,
-            })
-            .color(symbol.color)
-            .bind("Move", function (e) {
-              // destroy the entity if it has moved too far away on the left border
-              if (isTooFarOutOfWorld(this.x, this.vx)) {
-                if (DEBUG && 0) {
-                  console.log(
-                    "destroy a " + symbol.component + " at x = ",
-                    this.x
-                  );
-                }
-                this.destroy();
-              }
-            }); // end of chained calls from Crafty.e()
+/**
+ * Calculate the distance between the moment the slowest cell enters in the
+ * World, and the moment the message is revealed
+ * @param {*} aSymbol the message at hand
+ */
+function calculateMessageExpansion(aSymbol){
+  // expansion = visual distance to travel on the screen * speed / visualSpeed
+  // where:
+  // - distance to travel on the screen = CANVAS_WIDTH - xReveal
+  //   (since elements enter by the right side of the canvas)
+  // - visualSpeed = visualSpeed of the slowest cell of the message,
+  //   i.e. the cell with the lowest Z value (the further away from the observer).
+  visualDistance = CANVAS_WIDTH - aSymbol.xReveal;
+  zMin = Math.min(aSymbol.zTop, aSymbol.zBottom);
+  zMin = zMin - Math.abs(zMin)*MESSAGE_Z_RANDOMNESS_PERCENT / 100; // worst case
+  visualSpeed = calculateVisualSpeed(speed, zMin);
+  messageExpansion = visualDistance * speed / visualSpeed;
+  return (messageExpansion);
+}
+
+/**
+ * Create a message at a given distance. This message will be revealed at
+ * distance + messageExpansion
+ * @param {*} aSymbol the symbol describing the message
+ * @param {*} aDistance the distance travelled so far. A negative distance means pre-populating
+ */
+function createMessage(aSymbol, aDistance){
+  messageExpansion = calculateMessageExpansion(aSymbol);
+  numRows = aSymbol.message.length; // number of rows
+  numColumns = aSymbol.message[0].length; // length of string
+  for (row = 0; row < numRows; row++) {
+    // calculate the y position
+    yCell = aSymbol.yTop + (aSymbol.yBottom - aSymbol.yTop) * (row / (numRows - 1));
+    for (col = 0; col < numColumns; col++) {
+      // create a cell only if the character is not "space"
+      if (aSymbol.message[row].charAt(col) != ' '){
+      // calculate the x position when the message is revealed (aligned)
+      xCellReveal = aSymbol.xReveal + aSymbol.wReveal * (col / (numColumns - 1));
+      // calculate the z value in function of y, with some randomness added
+      // otherwise the horizontal lines will be too obviously visible
+      randomFactor =
+        1 -
+        MESSAGE_Z_RANDOMNESS_PERCENT / 100 +
+        Math.random() * ((2 * MESSAGE_Z_RANDOMNESS_PERCENT) / 100);
+      zCell = Math.round(
+        randomFactor *
+          (aSymbol.zTop +
+            ((yCell - aSymbol.yTop) / (aSymbol.yBottom - aSymbol.yTop)) *
+              (aSymbol.zBottom - aSymbol.zTop))
+      );
+      // Now compute the x position at the current distance, to get the message
+      // aligned at the requested distance
+      vxCell = (-calculateVisualSpeed(speed,zCell));
+      timeToReveal = messageExpansion / speed;
+      xCell = xCellReveal + timeToReveal * (-vxCell);
+      if (aDistance < 0){
+        // aDistance is negative, that means pre-populating the world
+        // assume a constant speed throughout the past
+        timeInThePast = -aDistance / speed; // time in seconds, positive
+        xCell += vxCell * timeInThePast; // note that vxCell is negative
+      }
+      // Now we know all we need to create the entity
+      Crafty.e("2D, Canvas, Color, Motion, Collision, " +
+        aSymbol.components.join())
+        .attr({
+          x: xCell,
+          y: yCell,
+          z: zCell,
+          w: 10, // will be set by the sprite
+          h: 10, // will be set by the sprite
+          vx: vxCell,
+        })
+        .color(aSymbol.color)
+        .bind("Move", function (e) {
+          // destroy the entity if it has moved too far away on the left border
+          if (isTooFarOutOfWorld(this.x, this.vx)) {
+            if (DEBUG && 0) {
+              console.log(
+                "destroy a " + aSymbol.component + " at x = ",
+                this.x
+              );
+            }
+            this.destroy();
           }
-        }
+        }); // end of chained calls from Crafty.e()
       }
     }
-  }); // end of forEach
+  }
 }
 
 // prepopulate the world (clouds and rocks typically) before starting the game
@@ -695,9 +744,6 @@ function prePopulateWorld() {
   }
   // restore the previous distance (normally zero)
   distance = distancePrev;
-
-  // Pre-populate the messages
-  populateMessages();
 }
 
 // action on hitting a cloud
