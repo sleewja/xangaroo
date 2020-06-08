@@ -9,6 +9,7 @@ var WORLD_HEIGHT = Math.round((WORLD_WIDTH / 16) * 9);
 var FLOOR_HEIGHT = 50;
 var Y_FLOOR = WORLD_HEIGHT - FLOOR_HEIGHT;
 var BUSH_HEIGHT = 120;
+var Y_STRATOSPHERE = 10;
 var FOOTER_HEIGHT = 100;
 var LEFT_MARGIN = 50;
 var CANVAS_WIDTH = LEFT_MARGIN + WORLD_WIDTH;
@@ -75,8 +76,8 @@ var symbols = [
     components: ["Cloud"],
     color: COLOR_CLOUD,
     // distanceFirst : 0,  if omitted: means that it will be pre-populated
-    distanceIntervalMin: 0, // min pixel distance between two    if omitted: no repetition
-    distanceIntervalMax: 200, // max pixel distance between two  if omitted: no repetition
+    //distanceIntervalMin: 0, // min pixel distance between two    if omitted: no repetition
+    //distanceIntervalMax: 200, // max pixel distance between two  if omitted: no repetition
     yMin: -20,
     yMax: 100,
     zAtYMin: -10, // if omitted: Z_SYMBOLS_DEFAULT
@@ -243,6 +244,25 @@ function drawWorld() {
       z: Z_BACKGROUND,
     })
     .color(COLOR_SKY);
+
+  // stratosphere
+  Crafty.e("2D, Canvas, Color, Stratosphere, Collision")
+    .attr({
+      x: LEFT_MARGIN,
+      y: Y_STRATOSPHERE-50,
+      w: CANVAS_WIDTH,
+      h: 50,
+      z: Z_BACKGROUND,
+    })
+    .color(COLOR_SKY)
+    .checkHits("Kangaroo")
+    .bind("HitOn", function (hitDatas){
+      if(DEBUG){console.log("Hit the stratosphere");}
+      // make the kangaroo stop its jump
+      hitDatas.forEach(function(hitData){
+        hitData.obj.stopJump();
+      })
+    });
 
   // Add kangaroo player
   Crafty.e("2D, Canvas, Color, Kangaroo")
@@ -698,7 +718,7 @@ function createMessage(aSymbol, aDistance){
         xCell += vxCell * timeInThePast; // note that vxCell is negative
       }
       // Now we know all we need to create the entity
-      Crafty.e("2D, Canvas, Color, Motion, Collision, " +
+      Crafty.e("2D, Canvas, Color, Motion, " +
         aSymbol.components.join())
         .attr({
           x: xCell,
