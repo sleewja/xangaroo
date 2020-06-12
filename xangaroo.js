@@ -48,7 +48,7 @@ var POPULATE_WORLD_DISTANCE_STEP = 10; // pixel distance between two calls of po
 var PRE_POPULATE_DURATION = 60000; // milliseconds simulated in the past to prepopulate the world
 var DELAY_TO_DISAPPEAR = 5000; // milliseconds: delay to destroy a symbol after exiting the world on the left side, if z=0. if z<0: the delay will be longer
 var MESSAGE_Z_RANDOMNESS_PERCENT = 10; // +/- randomness on z for messages, to prevent from horizontal lines to be too obviously visible
-var PIXELS_PER_METER = 20; // scale to convert pixels into metres
+var PIXELS_PER_METER = 10; // scale to convert pixels into metres
 
 // horizontal position of the kangaroo
 var X_KANGAROO = CANVAS_WIDTH / 3;
@@ -59,7 +59,8 @@ var X_KANGAROO = CANVAS_WIDTH / 3;
 // z>0 is in front of the kangaroo. z increases as we go in front towards the viewer
 var Z_BACKGROUND = -1000; // in the background, objects are fixed, their visual speed is 0
 var Z_SYMBOLS_DEFAULT = 0; // at z=0: visual speed = speed
-var Z_KANGAROO = 1; // use Z=1 and not zero, to be in front of symbols We should not put anything else in this Z plane
+var Z_TRACES = 1; // in front of symbols
+var Z_KANGAROO = 2; // use Z=2 and not zero, to be in front of symbols. We should not put anything else in this Z plane
 var Z_OBSERVER = 100; // at Z_OBSERVER the visual speed is infinite
 var Z_PANEL = 1000; // in front, to hide objects behind
 
@@ -80,6 +81,7 @@ var symbols = [
     components: ["Cloud"],
     color: COLOR_CLOUD,
     // distanceFirst : 0,  if omitted: means that it will be pre-populated
+    // distanceLast  if omitted: no limit
     distanceIntervalMin: 0, // min pixel distance between two    if omitted: no repetition
     distanceIntervalMax: 200, // max pixel distance between two  if omitted: no repetition
     yMin: -20,
@@ -95,19 +97,67 @@ var symbols = [
     },
   },
   {
-    components: ["Rock", "Floor"], // Floor = support for gravity
+    // rocks in the background
+    components: ["Rock"], // Floor = support for gravity
     color: COLOR_ROCK,
     distanceIntervalMin: 0, // min pixel distance between two
     distanceIntervalMax: 200, // max pixel distance between two
     yMin: 200,
-    yMax: WORLD_HEIGHT - 10,
-    zAtYMin: -500,
-    zAtYMax: 20, // positive: in front of the kangaroo
+    yMax: Y_FLOOR - 40,
+    zAtYMin: -600,
+    zAtYMax: -20,
+  },
+  {
+    // rocks in the way of Kangaroo
+    components: ["Rock"],
+    color: COLOR_ROCK,
+    distanceFirst: 500,
+    distanceIntervalMin: 15, // min pixel distance between two
+    distanceIntervalMax: 400, // max pixel distance between two
+    yMin: Y_FLOOR - 22,
+    yMax: Y_FLOOR - 17,
     onHitOn: function (x,y,hitDatas) {
-      //if (speed > 40) {
-      //  changeSpeed(1 / 1.1);
-      // }
+      onHitOnRock(x,y,hitDatas);
     },
+    patterns: [
+      [
+        // one rock
+        { x: 0, y: 0 },
+      ],
+      [
+        // 3 rocks - height 2, 
+        { x: 0, y: 0 },{ x: 15, y: 2 },{ x: 10, y: -12 }
+      ],
+      [
+        // height 3
+        { x: 0, y: 0 }, {x: 17,y:2},{x:34,y:3}, {x:10,y:-12}, {x:27,y:-11},{x:23,y:-25}
+      ],
+    ],
+  },
+  {
+    // rocks in front of Kangaroo
+    components: ["Rock"], // Floor = support for gravity
+    color: COLOR_ROCK,
+    distanceIntervalMin: 20, // min pixel distance between two
+    distanceIntervalMax: 300, // max pixel distance between two
+    yMin: Y_FLOOR - 10,
+    yMax: WORLD_HEIGHT - 25,
+    zAtYMin: 100,
+    zAtYMax: 200, // positive: in front of the kangaroo
+    patterns: [
+      [
+        // one rock
+        { x: 0, y: 0 },
+      ],
+      [
+        // 3 rocks - height 2, 
+        { x: 0, y: 0 },{ x: 15, y: 2 },{ x: 10, y: -12 }
+      ],
+      [
+        // height 3
+        { x: 0, y: 0 }, {x: 17,y:2},{x:34,y:3}, {x:10,y:-12}, {x:27,y:-11},{x:23,y:-25}
+      ],
+    ],
   },
   {
     components: ["Uluru"],
@@ -122,7 +172,7 @@ var symbols = [
   {
     components: ["Scorpion"],
     color: COLOR_SCORPION,
-    distanceFirst: 0, // first distance to appear in the world
+    distanceFirst: 1000, // first distance to appear in the world
     distanceIntervalMin: 0, // min pixel distance between two
     distanceIntervalMax: 100, // max pixel distance between two
     yMin: Y_FLOOR - 10,
@@ -141,6 +191,9 @@ var symbols = [
     distanceIntervalMax: 600, // max pixel distance between two
     yMin: Y_FLOOR - 10,
     yMax: Y_FLOOR - 10,
+    onHitOn: function (x,y,hitDatas) {
+      //hitDatas[0].obj.weight *= 1.1;
+    },
     patterns: [
       [
         // small cactus
@@ -168,9 +221,6 @@ var symbols = [
         { x: 20, y: -40 }, // right arm
       ],
     ],
-    onHitOn: function (x,y,hitDatas) {
-      //hitDatas[0].obj.weight *= 1.1;
-    },
   },
   {
     components: ["Message"],
@@ -192,24 +242,6 @@ var symbols = [
       " #####   ##  ##  ## ###          ######  ## ###  ## ###    ##    ##  ##  ####    #####    ####   ######    ##    #####   ####   ",
       " ##  ##  ##  ##  ##  ##          ##  ##  ##  ##  ##  ##    ##     ####   ##      ##  ##      ##  ##  ##    ##    ##  ##  ##     ",
       " #####    ####   ##  ##          ##  ##  ##  ##  ##  ##  ######    ##    ######  ##  ##   ####   ##  ##  ######  ##  ##  ###### ",
-    ],
-  },
-  {
-    components: ["Message"],
-    color: "red",
-    distanceFirst: 4000, // the message will become aligned at this distance
-    xReveal: LEFT_MARGIN + WORLD_WIDTH/2 - 50, // bounding rectangle of message in the sky at the moment it is aligned
-    wReveal: 50, // width
-    yTop: 10,     
-    yBottom: 50,
-    zTop: -200,
-    zBottom: -500,
-    message: [
-      " ##   ## ",
-      " ### ### ",
-      " ####### ",
-      "  #####  ",
-      "    #    ",
     ],
   },
 ];
@@ -235,6 +267,11 @@ var assetsObj = {
           "tileh": 10,
           "map": { "Cactus": [0,0]}
       },
+      "rock.png": {
+        "tile": 20,
+        "tileh": 19,
+        "map": { "Rock": [0,0]}
+      },
       "uluru.png": {
         "tile": 58,
         "tileh": 20,
@@ -245,11 +282,17 @@ var assetsObj = {
 
 var spritePolygons = {
   Kangaroo: new Crafty.polygon(
-    0,8, 16,13, 22,3, 35,3, 36,0, 47,0, 50,12, 40,24, 30,24, 30,39, 23,39
+    6,13, 16,13, 22,3, 35,3, 36,0, 47,0, 50,12, 40,24, 30,24, 32,38, 23,38
     ),
+  Cactus: new Crafty.polygon( // shrink a bit the polygon to be kind ;-)
+    2,2, 7,2,  7,7, 2,7
+  ),
   Cloud: new Crafty.polygon(
     15,7, 37,7, 37,21, 15,21
-  )
+  ),
+  Rock: new Crafty.polygon(
+    0,7, 5,0, 15,0, 19,8, 19,18, 0,18
+  ),
 }
 
 Crafty.init(CANVAS_WIDTH, CANVAS_HEIGHT, document.getElementById("xangaroo"));
@@ -325,13 +368,12 @@ function drawWorld() {
     });
 
   // Add kangaroo player
-  Crafty.e("2D, DOM, KangarooPlayer, Kangaroo")
+  Crafty.e("2D, Canvas, KangarooPlayer, Kangaroo")
     .attr({
       x: X_KANGAROO,
       y: Y_FLOOR - 20, // dropped from a bit above the floor to start rebouncing
       z: Z_KANGAROO,
     })
-    //.color(COLOR_KANGAROO);
 
   // prepopulate the world (clouds, rocks, messages...)
   prePopulateWorld();
@@ -342,7 +384,7 @@ function drawWorld() {
     x: LEFT_MARGIN + 10,
     y: WORLD_HEIGHT - 40,
     w: 100,
-    z: Z_OBSERVER,
+    z: Z_PANEL,
   })
   .text(function () {
     distanceMetres = distance/PIXELS_PER_METER;
@@ -358,7 +400,7 @@ function drawWorld() {
     x: LEFT_MARGIN + 10,
     y: WORLD_HEIGHT - 15,
     w: 100,
-    z: Z_OBSERVER,
+    z: Z_PANEL,
   })
   .text(function () {
     speedKph = speed*60*60/PIXELS_PER_METER/1000; // [kph]
@@ -558,8 +600,8 @@ function updateTraces() {
       traces[i] = [];
     }
 
-    // put a new trace at the new position (bottom left)
-    offsetX = 20;
+    // put a new trace at the new position (at the foot of kang)
+    offsetX = 25;
     offsetY = 0;
     traces[i].push(
       Crafty.e("2D, Canvas, Color, Trace, Motion")
@@ -568,7 +610,7 @@ function updateTraces() {
           y: kangarooEntities[i]._y + kangarooEntities[i]._h + offsetY - TRACE_SIZE,
           w: TRACE_SIZE,
           h: TRACE_SIZE,
-          z: Z_KANGAROO,
+          z: Z_TRACES,
           vx: -speed, // linear velocity, inherited from "Motion" component
         })
         .color(COLOR_TRACES)
@@ -678,7 +720,7 @@ function createSymbol(aSymbol, aDistance){
         })
         .checkHits("Kangaroo")
         .bind("HitOn", function (hitDatas) {
-          if (DEBUG && 0) {
+          if (DEBUG) {
             console.log("Hit a ", aSymbol.components);
           }
           if ("onHitOn" in aSymbol) {
@@ -751,6 +793,13 @@ function populateWorld() {
         symbol.distanceNext -= calculateMessageExpansion(symbol);
       }
     }
+    // stop if we have reached the distance max for this symbol
+    if ("distanceLast" in symbol){
+      if (distance > symbol.distanceLast){
+        symbol.continue = false;
+      }
+    }
+
     // now effectively check that we have reached the next scheduled distance,
     // provided we stll have to continue giving birth to symbols of this kind
     if (symbol.continue && distance >= symbol.distanceNext) {
@@ -907,6 +956,26 @@ function onHitOffCloud(componentName) {
   Crafty(componentName).get(0).gravity(); // start falling again
 }
 
+/**
+ * Action on hitting a Rock.
+ * I initially handled the rebound by symply adding "Floor" to the Rock, but then 
+ * it does not use the collision polygons to detect landing...
+ * @param {*} aRockEntity 
+ * @param {*} aHitDatas 
+ */
+function onHitOnRock(aRockEntity,aHitDatas){
+  kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
+  // Take action only if the hit is from above, ie landing on the rock, and not hitting it
+  // in the rising phase of a jump
+  if (!kangarooEntity.goingUp){
+    // Simulate landing on ground
+    kangarooEntity.onLandedOnGround();
+    // for some reason, simply triggering the built-in event "LandedOnGround" did not work:
+    // the kangaroo seemed to have lost its gravity: it went up forever.
+    // as workaround I implemented a "onLandedOnGround" function.
+  }
+}
+
 // ***********************************************
 // game logic
 // ***********************************************
@@ -989,14 +1058,7 @@ Crafty.c("KangarooPlayer", {
       this.canJump = true; // always allow jump, even double-jump
     },
     LandedOnGround: function (ground) {
-      this.timeOfLastLanding = new Date().getTime(); // milliseconds
-      // rebounce after a short delay, to leave a bit
-      // of time for the player to fire the jump
-      Crafty.e("Delay").delay(
-        this.triggerRebounce,
-        ACCEPTANCE_DELAY_AFTER_LANDING,
-        0
-      );
+      this.onLandedOnGround();
     },
     Rebounce: function (aEntity) {
       //this.color(COLOR_KANGAROO);
@@ -1074,6 +1136,16 @@ Crafty.c("KangarooPlayer", {
       }
     },
   }, // end of events
+  onLandedOnGround: function(){
+    this.timeOfLastLanding = new Date().getTime(); // milliseconds
+    // rebounce after a short delay, to leave a bit
+    // of time for the player to fire the jump
+    Crafty.e("Delay").delay(
+      this.triggerRebounce,
+      ACCEPTANCE_DELAY_AFTER_LANDING,
+      0
+    );
+  },
   startJump: function (aTargetHeight) {
     // introduce some randomness in the jump height
     randomFactor =
