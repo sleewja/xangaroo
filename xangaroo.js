@@ -30,12 +30,13 @@ var COLOR_KANGAROO = "darkorange";
 
 var SPEED_START = 60; // initial speed, in pixels/second
 var ENERGY_START = 25; // energy = height in pixels of the jump
+var ENERGY_MIN = 10;
 var ENERGY_DEFAULT_JUMP = 25; // default jump if no request from the player
 var ENERGY_GAIN_ON_LANDING = 20; // energy gain after a default jump while energy < ENERGY_MAX_FOR_GAIN_ON_LANDING
 var ENERGY_MAX_FOR_GAIN_ON_LANDING = 150; // max energy that can be reached by consecutive default jumps
 var ACCEPTANCE_DELAY_BEFORE_LANDING = 500; // milliseconds, delay to accept player jump request before landing
 var ACCEPTANCE_DELAY_AFTER_LANDING = 0; // milliseconds, delay between landing and rebounce where we stay on the ground, to allow player to fire the jump
-var ACCEPTANCE_DELAY_AFTER_LIFTOFF = 250; // milliseconds, delay to accept player jump request after a jump has startedn
+var ACCEPTANCE_DELAY_AFTER_LIFTOFF = 300; // milliseconds, delay to accept player jump request after a jump has started
 var JUMP_RANDOMNESS_PERCENT = 0; // +/- randomness on jump height and distance; 0 means no randomness
 var JUMP_RATIO = 0.5; // shape of the jump: jump height / jump distance
 var GRAVITY_RATIO = 5; // shape of the jump: gravity multiplication factor when going down
@@ -64,6 +65,10 @@ var Z_KANGAROO = 2; // use Z=2 and not zero, to be in front of symbols. We shoul
 var Z_OBSERVER = 100; // at Z_OBSERVER the visual speed is infinite
 var Z_PANEL = 1000; // in front, to hide objects behind
 
+var SCORPION_SPEED_MULTIPLIER = 2; // temporary speed increment due to scorpion's bite
+var SCORPION_POISON_DURATION = 1000; // milliseconds
+var SCORPION_ENERGY_DECREMENT = 150; // decrement energy when hitting a scorpion
+
 var startTime;
 // speed of the game, in pixels/seconds.
 // >0 means that the kangaroo goes rightwards, in fact the fixed objects go leftwards
@@ -87,10 +92,10 @@ var symbols = [
     yMin: -20,
     yMax: 100,
     zAtYMin: -10, // if omitted: Z_SYMBOLS_DEFAULT
-    zAtYMax: -990,// if omitted: Z_SYMBOLS_DEFAULT
+    zAtYMax: -800,// if omitted: Z_SYMBOLS_DEFAULT
     // patterns: [[{x:0, y:0}]] default pattern: can be omitted
-    onHitOn: function (x,y,hitDatas) {
-      onHitOnCloud(x,y,hitDatas);
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnCloud(aEntity,hitDatas);
     },
     onHitOff: function (componentName) {
       onHitOffCloud(componentName);
@@ -112,12 +117,12 @@ var symbols = [
     components: ["Rock"],
     color: COLOR_ROCK,
     distanceFirst: 500,
-    distanceIntervalMin: 15, // min pixel distance between two
+    distanceIntervalMin: 20, // min pixel distance between two
     distanceIntervalMax: 400, // max pixel distance between two
     yMin: Y_FLOOR - 22,
     yMax: Y_FLOOR - 17,
-    onHitOn: function (x,y,hitDatas) {
-      onHitOnRock(x,y,hitDatas);
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnRock(aEntity,hitDatas);
     },
     patterns: [
       [
@@ -131,6 +136,27 @@ var symbols = [
       [
         // height 3
         { x: 0, y: 0 }, {x: 17,y:2},{x:34,y:3}, {x:10,y:-12}, {x:27,y:-11},{x:23,y:-25}
+      ],
+    ],
+  },
+  {
+    // platform in the way of Kangaroo
+    components: ["Rock"],
+    color: COLOR_ROCK,
+    distanceFirst: 2000,
+    distanceIntervalMin: 500, // min pixel distance between two
+    distanceIntervalMax: 3000, // max pixel distance between two
+    yMin: Y_FLOOR - 22,
+    yMax: Y_FLOOR - 17,
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnRock(aEntity,hitDatas);
+    },
+    patterns: [
+      [
+        // platform - arch
+        {x:0,y:0},{x:10,y:-8},{x:20,y:-15},{x:30,y:-25},{x:40,y:-30},{x:50,y:-37},{x:60,y:-45},{x:70,y:-51},{x:80,y:-55},{x:90,y:-59},
+        {x:100,y:-61},{x:110,y:-64},{x:120,y:-68},{x:130,y:-70},{x:140,y:-69},{x:150,y:-66},{x:160,y:-61},{x:170,y:-51},{x:180,y:-42},
+        {x:185,y:-29},{x:190,y:-18},{x:192,y:-5},
       ],
     ],
   },
@@ -173,14 +199,14 @@ var symbols = [
     components: ["Scorpion"],
     color: COLOR_SCORPION,
     distanceFirst: 1000, // first distance to appear in the world
-    distanceIntervalMin: 0, // min pixel distance between two
-    distanceIntervalMax: 100, // max pixel distance between two
+    distanceIntervalMin: 100, // min pixel distance between two
+    distanceIntervalMax: 1000, // max pixel distance between two
     yMin: Y_FLOOR - 10,
     yMax: Y_FLOOR - 10,
     speedMin: -50, // speed of the symbol in pixel/second. <0 means go leftwards
     speedMax: -10,
-    onHitOn: function (x,y,hitDatas) {
-      //hitDatas[0].obj.weight /= 1.1;
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnScorpion(aEntity,hitDatas);
     },
   },
   {
@@ -191,8 +217,8 @@ var symbols = [
     distanceIntervalMax: 600, // max pixel distance between two
     yMin: Y_FLOOR - 10,
     yMax: Y_FLOOR - 10,
-    onHitOn: function (x,y,hitDatas) {
-      //hitDatas[0].obj.weight *= 1.1;
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnCactus(aEntity,hitDatas);
     },
     patterns: [
       [
@@ -257,6 +283,11 @@ var assetsObj = {
           "tileh": 39,
           "map": { "Kangaroo": [0,0] }
       },
+      "scorpy.png": {
+        "tile": 23,
+        "tileh": 17,
+        "map": { "Scorpion": [0,0] }
+      },
       "cloud.png": {
           "tile": 50,
           "tileh": 21,
@@ -267,6 +298,11 @@ var assetsObj = {
           "tileh": 10,
           "map": { "Cactus": [0,0]}
       },
+      "cactushit.png": {
+        "tile": 10,
+        "tileh": 10,
+        "map": { "CactusHit": [0,0]}
+     },
       "rock.png": {
         "tile": 20,
         "tileh": 19,
@@ -721,7 +757,10 @@ function createSymbol(aSymbol, aDistance){
         .checkHits("Kangaroo")
         .bind("HitOn", function (hitDatas) {
           if (DEBUG) {
-            console.log("Hit a ", aSymbol.components);
+            // only show cactus collisions in console
+            if (aSymbol.components.includes("Cactus")){
+              console.log("Hit a ", aSymbol.components, " at distance ",Math.round(distance));
+             }
           }
           if ("onHitOn" in aSymbol) {
             aSymbol.onHitOn(this,hitDatas);
@@ -976,6 +1015,41 @@ function onHitOnRock(aRockEntity,aHitDatas){
   }
 }
 
+/**
+ * Action on hitting a Scorpion.
+ * @param {*} aScorpionEntity 
+ * @param {*} aHitDatas 
+ */
+function onHitOnScorpion(aScorpionEntity,aHitDatas){
+  kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
+  // increase the speed for 1 second
+  // I tried it but did not find it nice...
+  /*changeSpeed(SCORPION_SPEED_MULTIPLIER);
+  Crafty.e("Delay").delay(
+    function(){
+      changeSpeed(1/SCORPION_SPEED_MULTIPLIER);
+    },
+    SCORPION_POISON_DURATION,
+    0
+  );*/
+
+  // decrease energy
+  kangarooEntity.energy = Math.max(
+      ENERGY_MIN,
+      kangarooEntity.energy - SCORPION_ENERGY_DECREMENT);
+
+}
+/**
+ * Action on hitting a cactus.
+ * @param {*} aScorpionEntity 
+ * @param {*} aHitDatas 
+ */
+function onHitOnCactus(aCactusEntity,aHitDatas){
+  kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
+  // change sprite
+  aCactusEntity.toggleComponent("Cactus","CactusHit");
+}
+
 // ***********************************************
 // game logic
 // ***********************************************
@@ -1155,7 +1229,7 @@ Crafty.c("KangarooPlayer", {
     heightOfJump = aTargetHeight * randomFactor;
     distanceOfJump = heightOfJump / JUMP_RATIO;
     [initialJumpSpeed, gravity] = calculateJump(heightOfJump, distanceOfJump);
-    if (DEBUG) {
+    if (DEBUG&&0) {
       console.log(
         "initialJumpSpeed: ",
         initialJumpSpeed,
