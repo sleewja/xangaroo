@@ -67,6 +67,7 @@ var Z_PANEL = 1000; // in front, to hide objects behind
 
 var SCORPION_SPEED_MULTIPLIER = 2; // temporary speed increment due to scorpion's bite
 var SCORPION_POISON_DURATION = 1000; // milliseconds
+var SCORPION_PAIN_SYMBOL_DURATION = 750; // milliseconds
 var SCORPION_ENERGY_DECREMENT = 150; // decrement energy when hitting a scorpion
 
 var startTime;
@@ -312,7 +313,12 @@ var assetsObj = {
         "tile": 58,
         "tileh": 20,
         "map": { "Uluru": [0,0]}
-    }
+    },
+    "pain.png": {
+      "tile": 19,
+      "tileh": 15,
+      "map": { "Pain": [0,0]}
+   }
   },
 };
 
@@ -1022,16 +1028,22 @@ function onHitOnRock(aRockEntity,aHitDatas){
  */
 function onHitOnScorpion(aScorpionEntity,aHitDatas){
   kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
-  // increase the speed for 1 second
-  // I tried it but did not find it nice...
-  /*changeSpeed(SCORPION_SPEED_MULTIPLIER);
+  // Attach pain bubble
+  var painSymbol = Crafty.e("2D, Canvas, Pain")
+  .attr({
+    x: kangarooEntity._x + 20,
+    y: kangarooEntity._y + 15,
+    z: Z_KANGAROO,
+  });
+  kangarooEntity.attach(painSymbol);
+  // Schedule its destruction
   Crafty.e("Delay").delay(
     function(){
-      changeSpeed(1/SCORPION_SPEED_MULTIPLIER);
+      Crafty("Pain").destroy();
     },
-    SCORPION_POISON_DURATION,
+    SCORPION_PAIN_SYMBOL_DURATION,
     0
-  );*/
+  );
 
   // decrease energy
   kangarooEntity.energy = Math.max(
@@ -1215,7 +1227,9 @@ Crafty.c("KangarooPlayer", {
     // rebounce after a short delay, to leave a bit
     // of time for the player to fire the jump
     Crafty.e("Delay").delay(
-      this.triggerRebounce,
+      this.triggerRebounce, 
+      // for some reason I cannot call directly this.rebounce here
+      // there is something I don't get, for "this"...
       ACCEPTANCE_DELAY_AFTER_LANDING,
       0
     );
