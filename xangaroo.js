@@ -1019,17 +1019,19 @@ function onHitOffCloud(componentName) {
  */
 function onHitOnRock(aRockEntity,aHitDatas){
   kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
-  // Take action only if the hit is from above, ie landing on the rock, and not hitting it
-  // in the rising phase of a jump
-  // TODO: mmm, does not give good results when jumping over the rock arches...
-  // maybe better to always rebounce
-  if (!kangarooEntity.goingUp){
-    // Simulate landing on ground
-    kangarooEntity.onLandedOnGround();
-    // for some reason, simply triggering the built-in event "LandedOnGround" did not work:
-    // the kangaroo seemed to have lost its gravity: it went up forever.
-    // as workaround I implemented a "onLandedOnGround" function.
-  }
+  // ignore the hit during player control (ie while the player presses Fire), because
+  // player control has priority.
+  // And only take action when the feet of the Kangaroo are on the rock, not his head!
+  bottomRock = aRockEntity.y + aRockEntity.h;
+  bottomKangaroo = kangarooEntity.y + kangarooEntity.h;
+  if (!kangarooEntity.playerControl 
+    && bottomRock - bottomKangaroo >= 0){
+        kangarooEntity.onLandedOnGround();
+   } else {
+     // restart hit detection
+     if (DEBUG){console.log("Hit a rock but not by the feet, or during player control.")}
+     aRockEntity.resetHitChecks("Kangaroo");
+   }
 }
 
 /**
@@ -1090,7 +1092,7 @@ Crafty.c("KangarooPlayer", {
     this.currentTargetHeight = 0; // target height of the current jump
     this.currentJumpSpeed = ENERGY_DEFAULT_JUMP; // jump speed used at the start of the current jump
     this.currentGravity = 500; // current gravity used, will be recalculated at each jump
-    this.currentPlayerJump = false; // true if the current jump was triggered by the player (ie not a default jump)
+    this.currentPlayerJump = false; // true if the current jump was triggered by the player, false if it's a  default jump
     this.playerJumpRequestLatched = false; // true if the player requested a jump
     this.playerJumpRequestLatchTime = 0; // time of the request
     this.playerControl = false; // true while the player presses the fire key or button
@@ -1158,7 +1160,6 @@ Crafty.c("KangarooPlayer", {
       this.onLandedOnGround();
     },
     Rebounce: function (aEntity) {
-      //this.color(COLOR_KANGAROO);
       // check if the player requested a jump within the acceptance window
       this.currentPlayerJump = false;
       if (this.playerJumpRequestLatched) {
@@ -1169,6 +1170,23 @@ Crafty.c("KangarooPlayer", {
           ACCEPTANCE_DELAY_BEFORE_LANDING + ACCEPTANCE_DELAY_AFTER_LANDING
         ) {
           this.currentPlayerJump = true;
+        }
+      }
+
+      // increase the energy, only in case of default jump, and if going down
+      // kinf of "gain potential energy". If we were going up, it typically means
+      // that we are climbing rocks and we hit the next rock in the rising phase
+      // of the jump. In that case, do not increase the energy. Otherwise, since this
+      // occurs several times in a row when climbing a rock arch, the energy is 
+      // far too quickly and easily increased.
+      if (!this.currentPlayerJump) {
+        // we started a default jump
+        if (!this.goingUp){
+          // and we were going down:
+          // increase the energy until some limit
+          if (this.energy < ENERGY_MAX_FOR_GAIN_ON_LANDING) {
+            this.energy += ENERGY_GAIN_ON_LANDING;
+          }
         }
       }
 
@@ -1192,14 +1210,6 @@ Crafty.c("KangarooPlayer", {
       this.yAtLiftOff = this._y;
       this.timeAtLiftOff = new Date().getTime();
       this.goingUp = true;
-
-      // increase the energy, only in case of default jump
-      if (!this.currentPlayerJump) {
-        // we started a default jump: increase the energy until some limit
-        if (this.energy < ENERGY_MAX_FOR_GAIN_ON_LANDING) {
-          this.energy += ENERGY_GAIN_ON_LANDING;
-        }
-      }
     },
     UpdateFrame: function (eventData) {
       this.checkPeakReached();
