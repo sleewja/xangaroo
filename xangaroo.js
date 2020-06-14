@@ -456,7 +456,7 @@ function drawWorld() {
 
 // draw left panel(energy level)
 function drawLeftPanel() {
-  // button for jump
+  // left panel: white rectangle to hide the objects passing behind
   Crafty.e("2D, Canvas, Color, Mouse")
     .attr({
       x: 0,
@@ -465,7 +465,16 @@ function drawLeftPanel() {
       h: WORLD_HEIGHT,
       z: Z_PANEL,
     })
-    .color("white")
+    .color("white");
+
+  // button for jump: whole canvas
+  Crafty.e("2D, Canvas, Mouse")
+    .attr({
+      x: 0,
+      y: 0,
+      w: CANVAS_WIDTH,
+      h: CANVAS_HEIGHT,
+    })
     .bind("MouseDown", function (MouseEvent) {
       Crafty("Kangaroo").onPlayerJumpRequest();
     })
@@ -1012,6 +1021,8 @@ function onHitOnRock(aRockEntity,aHitDatas){
   kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
   // Take action only if the hit is from above, ie landing on the rock, and not hitting it
   // in the rising phase of a jump
+  // TODO: mmm, does not give good results when jumping over the rock arches...
+  // maybe better to always rebounce
   if (!kangarooEntity.goingUp){
     // Simulate landing on ground
     kangarooEntity.onLandedOnGround();
