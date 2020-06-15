@@ -25,6 +25,7 @@ var COLOR_CLOUD = "white";
 var COLOR_ROCK = "crimson";
 var COLOR_ULURU = "peru";
 var COLOR_CACTUS = "forestgreen";
+var COLOR_PARASOL = "blue";
 var COLOR_MESSAGE = "deepskyblue";
 var COLOR_KANGAROO = "darkorange";
 
@@ -65,10 +66,11 @@ var Z_KANGAROO = 2; // use Z=2 and not zero, to be in front of symbols. We shoul
 var Z_OBSERVER = 100; // at Z_OBSERVER the visual speed is infinite
 var Z_PANEL = 1000; // in front, to hide objects behind
 
-var SCORPION_SPEED_MULTIPLIER = 2; // temporary speed increment due to scorpion's bite
-var SCORPION_POISON_DURATION = 1000; // milliseconds
+// Characteristics of symbols hit actions
 var SCORPION_PAIN_SYMBOL_DURATION = 750; // milliseconds
 var SCORPION_ENERGY_DECREMENT = 150; // decrement energy when hitting a scorpion
+var PARASOL_WEIGHT_RATIO = 0.5; // weight multiplication factor when hitting a parasol
+
 
 var startTime;
 // speed of the game, in pixels/seconds.
@@ -93,7 +95,9 @@ var symbols = [
     yMin: -20,
     yMax: 100,
     zAtYMin: -10, // if omitted: Z_SYMBOLS_DEFAULT
-    zAtYMax: -800,// if omitted: Z_SYMBOLS_DEFAULT
+    zAtYMax: -850,// if omitted: Z_SYMBOLS_DEFAULT
+    //speedMin: -50, // speed of the symbol in pixel/second. <0 means go leftwards. If omitted: 0
+    //speedMax: -10,
     // patterns: [[{x:0, y:0}]] default pattern: can be omitted
     onHitOn: function (aEntity,hitDatas) {
       onHitOnCloud(aEntity,hitDatas);
@@ -248,6 +252,27 @@ var symbols = [
         { x: 20, y: -40 }, // right arm
       ],
     ],
+  },
+  {
+    components: ["Parasol"],
+    color: COLOR_PARASOL,
+    distanceFirst: 0, // first distance to appear in the world
+    distanceIntervalMin: 100, // min pixel distance between two
+    distanceIntervalMax: 1000, // max pixel distance between two
+    yMin: 100,
+    yMax: Y_FLOOR - 50,
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnParasol(aEntity,hitDatas);
+    },
+    patterns : [
+      [ // single
+        { x: 0, y: 0 },
+      ],
+      [ // star
+        { x: 0, y: 0 },{ x: 20, y: 0 },{ x: 10, y: -10 },{ x: 10, y: 10 },
+      ],
+
+    ]
   },
   {
     components: ["Message"],
@@ -596,8 +621,7 @@ function calculateVisualSpeed(aSpeed, aZ) {
 function changeSpeed(aSpeedMultiplier) {
   prevSpeed = speed;
   speed *= aSpeedMultiplier;
-  // adapt the speed of all "Motion" components, except the Kangaroo,
-  // which stays in place!
+  // adapt the speed of all "Motion" components, except the Kangaroo which stay in place!
   Crafty("Motion")
     .get()
     .forEach(function (entity) {
@@ -771,11 +795,8 @@ function createSymbol(aSymbol, aDistance){
         })
         .checkHits("Kangaroo")
         .bind("HitOn", function (hitDatas) {
-          if (DEBUG) {
-            // only show cactus collisions in console
-            if (aSymbol.components.includes("Cactus")){
-              console.log("Hit a ", aSymbol.components, " at distance ",Math.round(distance));
-             }
+          if (DEBUG&&0) {
+            console.log("Hit a ", aSymbol.components, " at distance ",Math.round(distance));
           }
           if ("onHitOn" in aSymbol) {
             aSymbol.onHitOn(this,hitDatas);
@@ -987,7 +1008,7 @@ function prePopulateWorld() {
 }
 
 /**
- * action on hitting a cloud
+ * action on hitting a cloud: fly
  * @param {*} aCloudEntity the Cloud entity being hit
  * @param {*} aHitDatas 
  */ 
@@ -1011,7 +1032,7 @@ function onHitOffCloud(componentName) {
 }
 
 /**
- * Action on hitting a Rock.
+ * Action on hitting a Rock: rebounce (under some conditions)
  * I initially handled the rebound by symply adding "Floor" to the Rock, but then 
  * it does not use the collision polygons to detect landing...
  * @param {*} aRockEntity 
@@ -1029,13 +1050,13 @@ function onHitOnRock(aRockEntity,aHitDatas){
         kangarooEntity.onLandedOnGround();
    } else {
      // restart hit detection
-     if (DEBUG){console.log("Hit a rock but not by the feet, or during player control.")}
+     if (DEBUG&&0){console.log("Hit a rock but not by the feet, or during player control.")}
      aRockEntity.resetHitChecks("Kangaroo");
    }
 }
 
 /**
- * Action on hitting a Scorpion.
+ * Action on hitting a Scorpion: decrease energy
  * @param {*} aScorpionEntity 
  * @param {*} aHitDatas 
  */
@@ -1064,6 +1085,7 @@ function onHitOnScorpion(aScorpionEntity,aHitDatas){
       kangarooEntity.energy - SCORPION_ENERGY_DECREMENT);
 
 }
+
 /**
  * Action on hitting a cactus.
  * @param {*} aScorpionEntity 
@@ -1075,14 +1097,66 @@ function onHitOnCactus(aCactusEntity,aHitDatas){
   aCactusEntity.toggleComponent("Cactus","CactusHit");
 }
 
+/**
+ * Action on hitting a parasol: be lighter till next landing
+ * @param {*} aParasolEntity 
+ * @param {*} aHitDatas 
+ */
+function onHitOnParasol(aParasolEntity,aHitDatas){
+  kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
+  // attach parasol to kangaroo (above his head)
+  aParasolEntity.x = kangarooEntity._x + 10;
+  aParasolEntity.y = kangarooEntity._y -15;
+  // remove the Motion component since the parasol will now be atatched to the kangaroo
+  aParasolEntity.removeComponent("Motion",false); // "false" means hard remove
+  // attach to the kangaroo
+  kangarooEntity.attach(aParasolEntity);
+  // make lighter
+  kangarooEntity.weight *= PARASOL_WEIGHT_RATIO; 
+}
+
+/**
+ * Stop parasol effect, typically when landing
+ */
+function stopParasolEffect(){
+  // a bit ugly: get the kangaroo entity; we could probably receive it as argument
+  kangarooEntity = Crafty("Kangaroo").get(0);
+  // Remove all parachutes (if any) and revert the previous weight
+  // For any entity, this._children is the array of its children entity objects (if any),
+  // and this._parent is its parent entity object (if any).
+  
+  if (DEBUG){console.log("kangaroo children ",kangarooEntity._children);}
+  
+  // TODO: to be improved...
+
+  kangarooEntity._children.forEach( function(childEntity)
+  {
+    try {
+      // look for Parasols
+      if (childEntity.has("Parasol")){
+        // For each parasol: destroy it, and revert to previous weight
+        kangarooEntity.weight /= PARASOL_WEIGHT_RATIO;
+        childEntity.destroy();
+      }
+    }
+    catch(err) {
+
+    }
+  });
+}
+
 // ***********************************************
 // game logic
 // ***********************************************
 
 Crafty.c("KangarooPlayer", {
+  
   required: "2D, Jumper, Gravity, Keyboard, Collision",
+  
   init: function () {
-    // exported properties
+    // exported properties. By defining them this way in the init
+    // method, they will not be shared: they will be unique per
+    // KangarooPlayer.
     // We could also really use "properties", but that seems overkill
     this.yAtLiftOff = Y_FLOOR; // y when last jump was started
     this.timeAtLiftOff = 0; // time of last jump start
@@ -1107,7 +1181,7 @@ Crafty.c("KangarooPlayer", {
 
   properties: {
     // weight <1: lighter: will jump higher; >1: heavier
-    // we use a property to take action when hitting an object that impacts the weight
+    // we use a property to take immediate action when hitting an object that impacts the weight
     // public value
     weight: {
       set: function (value) {
@@ -1123,6 +1197,7 @@ Crafty.c("KangarooPlayer", {
           this._weight = value; // update the private variable
           this.gravity(); // re-enable gravity if it was stopped by antigravity
           this.gravityConst(this.currentGravity);
+          if(DEBUG){console.log("weight = ", this._weight );}
         }
       },
 
@@ -1174,7 +1249,7 @@ Crafty.c("KangarooPlayer", {
       }
 
       // increase the energy, only in case of default jump, and if going down
-      // kinf of "gain potential energy". If we were going up, it typically means
+      // kind of "gain potential energy". If we were going up, it typically means
       // that we are climbing rocks and we hit the next rock in the rising phase
       // of the jump. In that case, do not increase the energy. Otherwise, since this
       // occurs several times in a row when climbing a rock arch, the energy is 
@@ -1244,6 +1319,8 @@ Crafty.c("KangarooPlayer", {
     },
   }, // end of events
   onLandedOnGround: function(){
+    // Stop parasol effect, if active
+    stopParasolEffect();
     this.timeOfLastLanding = new Date().getTime(); // milliseconds
     // rebounce after a short delay, to leave a bit
     // of time for the player to fire the jump
