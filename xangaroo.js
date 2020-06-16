@@ -40,9 +40,11 @@ var ACCEPTANCE_DELAY_AFTER_LANDING = 0; // milliseconds, delay between landing a
 var ACCEPTANCE_DELAY_AFTER_LIFTOFF = 300; // milliseconds, delay to accept player jump request after a jump has started
 var JUMP_RANDOMNESS_PERCENT = 0; // +/- randomness on jump height and distance; 0 means no randomness
 var JUMP_RATIO = 0.5; // shape of the jump: jump height / jump distance
-var GRAVITY_RATIO = 5; // shape of the jump: gravity multiplication factor when going down
+var GRAVITY_RATIO_DEFAULT = 5; // shape of the jump: gravity multiplication factor when going down
 // >1.0 for heavy fall, <1.0 for lighter and longer fall
 // riseTime/fallTime = sqrt(GRAVITY_RATIO)
+/** max gravity */
+var GRAVITY_MAX = 1000;
 var TRACE_FRAME_STEP = 2; // number of frames between each trace update
 var TRACE_MAX_COUNT = 100; // max number of traces to remember
 var TRACE_SIZE = 2; // size of trace blocks
@@ -69,13 +71,16 @@ var Z_PANEL = 1000; // in front, to hide objects behind
 // Characteristics of symbols hit actions
 var SCORPION_PAIN_SYMBOL_DURATION = 750; // milliseconds
 var SCORPION_ENERGY_DECREMENT = 150; // decrement energy when hitting a scorpion
-var PARASOL_WEIGHT_RATIO = 0.5; // weight multiplication factor when hitting a parasol
-
+/**  weight multiplication factor when hitting a parasol 
+ *  if < 1: we'll be lighter, and jump higher. Ex if 0.5 we jump 2 x higher */
+var PARASOL_WEIGHT_RATIO = 0.5;
+var PARASOL_GRAVITY_RATIO = 1; // shape of the jump when we have a parasol, see GRAVITY_RATIO_DEFAULT
 
 var startTime;
-// speed of the game, in pixels/seconds.
-// >0 means that the kangaroo goes rightwards, in fact the fixed objects go leftwards
-// <0 the kangaroo goes leftwards, the fixed objects go rightwards
+/** speed of the game, in pixels/seconds.
+ *  >0 means that the kangaroo goes rightwards, in fact the fixed objects go leftwards
+ * <0 the kangaroo goes leftwards, the fixed objects go rightwards
+ * */
 var speed;
 var distance; // distance travelled in pixels
 var distanceLastPopulate; // distance last time populateWorld was called
@@ -268,9 +273,9 @@ var symbols = [
       [ // single
         { x: 0, y: 0 },
       ],
-      [ // star
+      /*[ // star
         { x: 0, y: 0 },{ x: 20, y: 0 },{ x: 10, y: -10 },{ x: 10, y: 10 },
-      ],
+      ],*/
 
     ]
   },
@@ -537,18 +542,9 @@ function drawLeftPanel() {
     .color("red", 0.75) // slightly transparent
     .bind("UpdateFrame", function (data) {
       // update height according to energy used by controlled jump
-      kangarooEntity = Crafty("Kangaroo").get(0);
-      if (kangarooEntity.playerControl) {
-        currentJumpHeight = kangarooEntity.yAtLiftOff - kangarooEntity._y;
-        this.h = currentJumpHeight * kangarooEntity.weight; // = used energy: we need more energy when we are heavier
-        this.y = Y_FLOOR - this._h;
-      } else {
-        // empty the control bar when we start going down
-        if (this._h > 0 && !kangarooEntity.goingUp) {
-          this.h = 0;
-          this.y = Y_FLOOR;
-        }
-      }
+      playerControlledEnergy = Crafty("Kangaroo").get(0).playerControlledEnergy;
+      this.h = playerControlledEnergy;
+      this.y = Y_FLOOR - this._h;
     });
 }
 
@@ -575,13 +571,16 @@ function drawFooter() {
 // calculate the jump characteristics to reach a certain height and a certain distance
 // see this very usful explanation: https://www.youtube.com/watch?v=hG9SzQxaCm8
 // returns [initialJumpSpeed, gravity]
-function calculateJump(aHeight, aDistance) {
+function calculateJump(aHeight, aDistance, aGravityRatio) {
   // compute duration = time to reach peak
   durationToPeak =
-    aDistance / (Math.abs(speed) * (1 + 1 / Math.sqrt(GRAVITY_RATIO)));
+    aDistance / (Math.abs(speed) * (1 + 1 / Math.sqrt(aGravityRatio)));
   // then compute speed and gravity
   initialJumpSpeed = (2 * aHeight) / durationToPeak;
   gravity = (2 * aHeight) / (durationToPeak * durationToPeak);
+  if (gravity>1000){
+    console.log("hmm, big gravity...");
+  }
   return [initialJumpSpeed, gravity];
 }
 
@@ -1008,6 +1007,28 @@ function prePopulateWorld() {
 }
 
 /**
+ * Utility function: get a list of attached entities (children) with a given componentName
+ * @param {*} entity the entity (parent)
+ * @param {*} componentName component name searched for in children
+ */
+function getAttachedEntities(entity, componentName){
+  attachedEntitiesWithGivenComponent = [];
+  // For any entity, this._children is the array of its children entity objects (if any),
+  // and this._parent is its parent entity object (if any).
+  entity._children.forEach( function(childEntity)
+  {
+    // first check presence of "has" method, because debugging reveals that
+    // _children contain two non-entity objects, with "Points"
+    if (childEntity.has){
+      if (childEntity.has(componentName)){
+        attachedEntitiesWithGivenComponent.push(childEntity);
+      }
+    }
+  });
+  return (attachedEntitiesWithGivenComponent);
+}
+
+/**
  * action on hitting a cloud: fly
  * @param {*} aCloudEntity the Cloud entity being hit
  * @param {*} aHitDatas 
@@ -1093,8 +1114,10 @@ function onHitOnScorpion(aScorpionEntity,aHitDatas){
  */
 function onHitOnCactus(aCactusEntity,aHitDatas){
   kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
-  // change sprite
-  aCactusEntity.toggleComponent("Cactus","CactusHit");
+  // Put blood on cactus...
+  if (aCactusEntity.has("Cactus")){
+    aCactusEntity.toggleComponent("Cactus","CactusHit");
+  }
 }
 
 /**
@@ -1111,38 +1134,44 @@ function onHitOnParasol(aParasolEntity,aHitDatas){
   aParasolEntity.removeComponent("Motion",false); // "false" means hard remove
   // attach to the kangaroo
   kangarooEntity.attach(aParasolEntity);
-  // make lighter
-  kangarooEntity.weight *= PARASOL_WEIGHT_RATIO; 
+  
+  if (kangarooEntity.goingUp){
+    kangarooEntity.jump();
+    // and jump further by elongating the jump
+    kangarooEntity.gravityRatio = PARASOL_GRAVITY_RATIO;
+  }
+  
+  /*
+  // make lighter: it means that we'll jump higher with the same energy consumed
+  kangarooEntity.weight *= PARASOL_WEIGHT_RATIO;
+  // and jump further by elongating the jump
+  kangarooEntity.gravityRatio = PARASOL_GRAVITY_RATIO;
+  // if going down:
+  if (!kangarooEntity.goingUp){
+    // simulate parachute
+    kangarooEntity.gravityConst(15); //TODO: check this
+  }*/
 }
 
 /**
  * Stop parasol effect, typically when landing
  */
-function stopParasolEffect(){
-  // a bit ugly: get the kangaroo entity; we could probably receive it as argument
-  kangarooEntity = Crafty("Kangaroo").get(0);
-  // Remove all parachutes (if any) and revert the previous weight
-  // For any entity, this._children is the array of its children entity objects (if any),
-  // and this._parent is its parent entity object (if any).
-  
-  if (DEBUG){console.log("kangaroo children ",kangarooEntity._children);}
-  
-  // TODO: to be improved...
-
-  kangarooEntity._children.forEach( function(childEntity)
+function stopParasolEffect(kangarooEntity){
+  // look for parasols
+  attachedParasolEntities = getAttachedEntities(kangarooEntity, "Parasol");
+  // Remove all parasols (if any) and revert the previous weight
+  attachedParasolEntities.forEach( function(parasolEntity)
   {
-    try {
-      // look for Parasols
-      if (childEntity.has("Parasol")){
-        // For each parasol: destroy it, and revert to previous weight
-        kangarooEntity.weight /= PARASOL_WEIGHT_RATIO;
-        childEntity.destroy();
-      }
-    }
-    catch(err) {
-
-    }
+    // For each parasol:
+    // - revert to previous weight
+    // - detach entity from Kangaroo,
+    // - and destroy it
+    //kangarooEntity.weight /= PARASOL_WEIGHT_RATIO;
+    kangarooEntity.detach(parasolEntity);
+    parasolEntity.destroy();
   });
+  // and revert to normal gravity ratio
+  kangarooEntity.gravityRatio = GRAVITY_RATIO_DEFAULT;
 }
 
 // ***********************************************
@@ -1164,8 +1193,9 @@ Crafty.c("KangarooPlayer", {
     this.goingUp = false; // true if we are going up
     this.energy = ENERGY_START; // energy reserve
     this.currentTargetHeight = 0; // target height of the current jump
-    this.currentJumpSpeed = ENERGY_DEFAULT_JUMP; // jump speed used at the start of the current jump
+    this.currentJumpSpeed = 0; // jump speed used at the start of the current jump
     this.currentGravity = 500; // current gravity used, will be recalculated at each jump
+    this.gravityRatio = GRAVITY_RATIO_DEFAULT; // defines the shape of the jump
     this.currentPlayerJump = false; // true if the current jump was triggered by the player, false if it's a  default jump
     this.playerJumpRequestLatched = false; // true if the player requested a jump
     this.playerJumpRequestLatchTime = 0; // time of the request
@@ -1194,10 +1224,13 @@ Crafty.c("KangarooPlayer", {
         } else {
           // when the weight is changed, we change the gravity to simulate being heavier/lighter
           this.currentGravity *= value / this._weight;
+          if (this.currentGravity > GRAVITY_MAX){
+            this.currentGravity = GRAVITY_MAX;
+          }
           this._weight = value; // update the private variable
           this.gravity(); // re-enable gravity if it was stopped by antigravity
           this.gravityConst(this.currentGravity);
-          if(DEBUG){console.log("weight = ", this._weight );}
+          if(DEBUG){console.log("weight = ", this._weight," gravity = ", this.currentGravity );}
         }
       },
 
@@ -1288,12 +1321,13 @@ Crafty.c("KangarooPlayer", {
     },
     UpdateFrame: function (eventData) {
       this.checkPeakReached();
+      this.updatePlayerControlledEnergy();
     },
     PeakReached: function (peakHeight) {
       // when peak reached we can do special actions,
       // like disable gravity ("flying!") or increase gravity
       // (sudden fall)
-      if (DEBUG && 0) {
+      if (DEBUG) {
         console.log(
           "Peak reached: gravity = ",
           this.currentGravity,
@@ -1311,16 +1345,18 @@ Crafty.c("KangarooPlayer", {
       // remove the used energy, in case of player jump
       // and keep at least enough energy for a default jump
       if (this.currentPlayerJump) {
-        this.energy = Math.max(
+          this.energy = Math.max(
           this.energy - this.playerControlledEnergy,
-          ENERGY_DEFAULT_JUMP
-        );
+          ENERGY_DEFAULT_JUMP);
+          // consume the player controlled energy
+          this.playerControlledEnergy=0;
       }
     },
   }, // end of events
+  // start of methods
   onLandedOnGround: function(){
     // Stop parasol effect, if active
-    stopParasolEffect();
+    stopParasolEffect(this);
     this.timeOfLastLanding = new Date().getTime(); // milliseconds
     // rebounce after a short delay, to leave a bit
     // of time for the player to fire the jump
@@ -1340,8 +1376,8 @@ Crafty.c("KangarooPlayer", {
       Math.random() * ((2 * JUMP_RANDOMNESS_PERCENT) / 100);
     heightOfJump = aTargetHeight * randomFactor;
     distanceOfJump = heightOfJump / JUMP_RATIO;
-    [initialJumpSpeed, gravity] = calculateJump(heightOfJump, distanceOfJump);
-    if (DEBUG&&0) {
+    [initialJumpSpeed, gravity] = calculateJump(heightOfJump, distanceOfJump, this.gravityRatio);
+    if (DEBUG) {
       console.log(
         "initialJumpSpeed: ",
         initialJumpSpeed,
@@ -1360,13 +1396,25 @@ Crafty.c("KangarooPlayer", {
     // in case of player-controlled jump: stop the control
     if (this.playerControl) {
       this.playerControl = false;
-      // remember the energy requested by the controlled jump, to remove it later,
-      // typically when we reach the peak
-      this.playerControlledEnergy = (this.yAtLiftOff - this._y) * this.weight;
     }
     // and start falling down by increasing the gravity
-    this.currentGravity *= GRAVITY_RATIO;
+    this.currentGravity *= this.gravityRatio;
+    if (this.currentGravity > GRAVITY_MAX){
+      this.currentGravity = GRAVITY_MAX;
+    }
     this.gravityConst(this.currentGravity);
+    if(DEBUG){console.log("in StopJump: new gravity = ", this.currentGravity);}
+  },
+  updatePlayerControlledEnergy: function(){
+    // continuously update the energy requested by user controlled jump,
+    // while the user keeps pressing "Fire"
+    // we do this continuously, to be able to observe it in the energy bar
+    if (this.playerControl) {
+      // if we have a parasol: we don't use consume more energy
+      if (getAttachedEntities(this,"Parasol").length==0){
+        this.playerControlledEnergy = (this.yAtLiftOff - this._y) * this.weight;
+      }
+    }
   },
   checkPeakReached: function () {
     // Check if we reached the peak and start going down
