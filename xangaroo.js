@@ -51,6 +51,7 @@ var TRACE_SIZE = 2; // size of trace blocks
 var POPULATE_WORLD_DISTANCE_STEP = 10; // pixel distance between two calls of populateWorld
 var PRE_POPULATE_DURATION = 60000; // milliseconds simulated in the past to prepopulate the world
 var DELAY_TO_DISAPPEAR = 5000; // milliseconds: delay to destroy a symbol after exiting the world on the left side, if z=0. if z<0: the delay will be longer
+var Y_DISAPPEAR = -50; // y position too far aboce: symbol is destroyed
 var MESSAGE_Z_RANDOMNESS_PERCENT = 10; // +/- randomness on z for messages, to prevent from horizontal lines to be too obviously visible
 var PIXELS_PER_METER = 10; // scale to convert pixels into metres
 
@@ -71,9 +72,6 @@ var Z_PANEL = 1000; // in front, to hide objects behind
 // Characteristics of symbols hit actions
 var SCORPION_PAIN_SYMBOL_DURATION = 750; // milliseconds
 var SCORPION_ENERGY_DECREMENT = 150; // decrement energy when hitting a scorpion
-/**  weight multiplication factor when hitting a parasol 
- *  if < 1: we'll be lighter, and jump higher. Ex if 0.5 we jump 2 x higher */
-var PARASOL_WEIGHT_RATIO = 0.5;
 var PARASOL_GRAVITY_RATIO = 1; // shape of the jump when we have a parasol, see GRAVITY_RATIO_DEFAULT
 
 var startTime;
@@ -433,9 +431,9 @@ function drawWorld() {
     .checkHits("Kangaroo")
     .bind("HitOn", function (hitDatas){
       if(DEBUG){console.log("Hit the stratosphere");}
-      // make the kangaroo stop its jump
+      // make the kangaroo start falling quicker
       hitDatas.forEach(function(hitData){
-        hitData.obj.stopJump();
+        hitData.obj.fallQuicker();
       })
     });
 
@@ -578,9 +576,6 @@ function calculateJump(aHeight, aDistance, aGravityRatio) {
   // then compute speed and gravity
   initialJumpSpeed = (2 * aHeight) / durationToPeak;
   gravity = (2 * aHeight) / (durationToPeak * durationToPeak);
-  if (gravity>1000){
-    console.log("hmm, big gravity...");
-  }
   return [initialJumpSpeed, gravity];
 }
 
@@ -620,11 +615,19 @@ function calculateVisualSpeed(aSpeed, aZ) {
 function changeSpeed(aSpeedMultiplier) {
   prevSpeed = speed;
   speed *= aSpeedMultiplier;
-  // adapt the speed of all "Motion" components, except the Kangaroo which stay in place!
+  // adapt the speed of all "Motion" components, except the Kangaroo and all its children
+  // (attached entities), which stay in place!
   Crafty("Motion")
     .get()
     .forEach(function (entity) {
-      if (!entity.has("Kangaroo")){
+      isAttachedToKangaroo = false;
+      if ( entity._parent){ // check first presence of a parent (returns NULL if absent)
+        if (entity._parent.has("Kangaroo")){
+          isAttachedToKangaroo = true;
+        }        
+      }
+
+      if (!entity.has("Kangaroo") && !isAttachedToKangaroo) {
         // visual speed of the entity if it was fixed:
         visualSpeedIfEntityFixed = calculateVisualSpeed(-prevSpeed, entity.z);
         // deduce the absolute horizontal speed of the entity
@@ -692,12 +695,14 @@ function updateTraces() {
   }
 }
 
-/** Check if a symbol is too far left outside of the world, and must be destroyed
+/** Check if a symbol is too far left outside of the world or too high above, and must be destroyed
  * @param x the x position
- * @param avx the horizontal velocity (typically negative)
+ * @param vx the horizontal velocity (typically negative)
+ * @param y the y position
  */
-function isTooFarOutOfWorld(ax, avx) {
-  return ax < LEFT_MARGIN - Math.abs(avx) * (DELAY_TO_DISAPPEAR / 1000);
+function isTooFarOutOfWorld(x, vx, y) {
+  return (x < LEFT_MARGIN - Math.abs(vx) * (DELAY_TO_DISAPPEAR / 1000))
+    || (y < Y_DISAPPEAR);
 }
 
 
@@ -767,7 +772,7 @@ function createSymbol(aSymbol, aDistance){
     xNewBorn += vxNewBorn * timeInThePast; // note that vx is negative
   }
   // do not create the entity if it's too far out of the world on the left
-  if (isTooFarOutOfWorld(xNewBorn, vxNewBorn)) {
+  if (isTooFarOutOfWorld(xNewBorn, vxNewBorn, yNewBorn)) {
     if (DEBUG && 0) {
       console.log(
         "Prepopulate: ",
@@ -811,7 +816,7 @@ function createSymbol(aSymbol, aDistance){
         })
         .bind("Move", function (e) {
           // destroy the entity if it has moved too far away on the left border
-          if (isTooFarOutOfWorld(this._x, this.vx)) {
+          if (isTooFarOutOfWorld(this._x, this.vx, this._y)) {
             if (DEBUG && 0) {
               console.log(
                 "destroy a " + aSymbol.components + " at x = ",
@@ -971,7 +976,7 @@ function createMessage(aSymbol, aDistance){
         .color(aSymbol.color)
         .bind("Move", function (e) {
           // destroy the entity if it has moved too far away on the left border
-          if (isTooFarOutOfWorld(this._x, this.vx)) {
+          if (isTooFarOutOfWorld(this._x, this.vx, this._y)) {
             if (DEBUG && 0) {
               console.log(
                 "destroy a " + aSymbol.components + " at x = ",
@@ -1061,12 +1066,12 @@ function onHitOffCloud(componentName) {
  */
 function onHitOnRock(aRockEntity,aHitDatas){
   kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
-  // ignore the hit during player control (ie while the player presses Fire), because
-  // player control has priority.
+  // ignore the hit during player control and going up, because
+  // player control has priority, and we let the controlled jump go.
   // And only take action when the feet of the Kangaroo are on the rock, not his head!
   bottomRock = aRockEntity.y + aRockEntity.h;
   bottomKangaroo = kangarooEntity.y + kangarooEntity.h;
-  if (!kangarooEntity.playerControl 
+  if (!(kangarooEntity.playerControl && kangarooEntity.goingUp)
     && bottomRock - bottomKangaroo >= 0){
         kangarooEntity.onLandedOnGround();
    } else {
@@ -1130,31 +1135,33 @@ function onHitOnParasol(aParasolEntity,aHitDatas){
   // attach parasol to kangaroo (above his head)
   aParasolEntity.x = kangarooEntity._x + 10;
   aParasolEntity.y = kangarooEntity._y -15;
-  // remove the Motion component since the parasol will now be atatched to the kangaroo
-  aParasolEntity.removeComponent("Motion",false); // "false" means hard remove
+  // remove the Motion component since the parasol will now be attached to the kangaroo
+  //aParasolEntity.removeComponent("Motion", false); // "false" means hard remove
+  // the plan was to re-add this component later on, when we release the parasol.
+  // BUT: bug of Crafty? I cannot remove then re-add the "Motion" component.
+  // I get an error: "TypeError: can't redefine non-configurable property "vx"" 
+  // Therefore I will do it another way... set the vx speed to 0.
+  aParasolEntity.vx = 0;
   // attach to the kangaroo
   kangarooEntity.attach(aParasolEntity);
-  
+  // freeze the controlled energy: it's the parasol now which carries us!
+  kangarooEntity.freezePlayerControlledEnergy();
+  // if going up: re-jump, and jump further by elongating the jump
   if (kangarooEntity.goingUp){
     kangarooEntity.jump();
-    // and jump further by elongating the jump
     kangarooEntity.gravityRatio = PARASOL_GRAVITY_RATIO;
+  } else {
+    // going down: set a very low gravity to make the jump longer
+    // does not work well...
+    // workaround: set antigravity, then restart gravity
+    kangarooEntity.antigravity();
+    kangarooEntity.gravityConst(50);
+    kangarooEntity.gravity();
   }
-  
-  /*
-  // make lighter: it means that we'll jump higher with the same energy consumed
-  kangarooEntity.weight *= PARASOL_WEIGHT_RATIO;
-  // and jump further by elongating the jump
-  kangarooEntity.gravityRatio = PARASOL_GRAVITY_RATIO;
-  // if going down:
-  if (!kangarooEntity.goingUp){
-    // simulate parachute
-    kangarooEntity.gravityConst(15); //TODO: check this
-  }*/
 }
 
 /**
- * Stop parasol effect, typically when landing
+ * Stop parasol effect, typically when releasing the Fire, or when landing
  */
 function stopParasolEffect(kangarooEntity){
   // look for parasols
@@ -1163,12 +1170,12 @@ function stopParasolEffect(kangarooEntity){
   attachedParasolEntities.forEach( function(parasolEntity)
   {
     // For each parasol:
-    // - revert to previous weight
     // - detach entity from Kangaroo,
-    // - and destroy it
-    //kangarooEntity.weight /= PARASOL_WEIGHT_RATIO;
+    // - make it fly away
     kangarooEntity.detach(parasolEntity);
-    parasolEntity.destroy();
+    parasolEntity.vx = -speed;
+    parasolEntity.vy = -10;
+    parasolEntity.ay = -20;
   });
   // and revert to normal gravity ratio
   kangarooEntity.gravityRatio = GRAVITY_RATIO_DEFAULT;
@@ -1201,6 +1208,7 @@ Crafty.c("KangarooPlayer", {
     this.playerJumpRequestLatchTime = 0; // time of the request
     this.playerControl = false; // true while the player presses the fire key or button
     this.playerControlledEnergy = 0; // energy requested by controlled jump
+    this.playerControlledEnergyFrozen = false; // freeze used energy (ex when hitting a parasol)
     this.timeOfLastLanding = 0; // time of last lading on ground
     // init operations
     this.gravityConst(this.currentGravity);
@@ -1327,7 +1335,7 @@ Crafty.c("KangarooPlayer", {
       // when peak reached we can do special actions,
       // like disable gravity ("flying!") or increase gravity
       // (sudden fall)
-      if (DEBUG) {
+      if (DEBUG&&0) {
         console.log(
           "Peak reached: gravity = ",
           this.currentGravity,
@@ -1340,23 +1348,17 @@ Crafty.c("KangarooPlayer", {
           "[ms]"
         );
       }
-      // stop jump
-      this.stopJump();
-      // remove the used energy, in case of player jump
-      // and keep at least enough energy for a default jump
-      if (this.currentPlayerJump) {
-          this.energy = Math.max(
-          this.energy - this.playerControlledEnergy,
-          ENERGY_DEFAULT_JUMP);
-          // consume the player controlled energy
-          this.playerControlledEnergy=0;
-      }
+      // fall quicker (we fall quicker than we rise, to give a more natural feeling)
+      this.fallQuicker();
     },
   }, // end of events
   // start of methods
   onLandedOnGround: function(){
     // Stop parasol effect, if active
     stopParasolEffect(this);
+    // Stop player control, if active
+    this.stopPlayerControl();
+
     this.timeOfLastLanding = new Date().getTime(); // milliseconds
     // rebounce after a short delay, to leave a bit
     // of time for the player to fire the jump
@@ -1377,7 +1379,7 @@ Crafty.c("KangarooPlayer", {
     heightOfJump = aTargetHeight * randomFactor;
     distanceOfJump = heightOfJump / JUMP_RATIO;
     [initialJumpSpeed, gravity] = calculateJump(heightOfJump, distanceOfJump, this.gravityRatio);
-    if (DEBUG) {
+    if (DEBUG&&0) {
       console.log(
         "initialJumpSpeed: ",
         initialJumpSpeed,
@@ -1392,29 +1394,25 @@ Crafty.c("KangarooPlayer", {
     // and now: jump !
     this.jump();
   },
-  stopJump: function () {
-    // in case of player-controlled jump: stop the control
-    if (this.playerControl) {
-      this.playerControl = false;
-    }
-    // and start falling down by increasing the gravity
+  fallQuicker: function () {
+    //  start falling down by increasing the gravity
     this.currentGravity *= this.gravityRatio;
     if (this.currentGravity > GRAVITY_MAX){
       this.currentGravity = GRAVITY_MAX;
     }
     this.gravityConst(this.currentGravity);
-    if(DEBUG){console.log("in StopJump: new gravity = ", this.currentGravity);}
+    if(DEBUG&&0){console.log("in fallQuicker: new gravity = ", this.currentGravity);}
+  },
+  freezePlayerControlledEnergy: function(){
+    this.playerControlledEnergyFrozen = true;
   },
   updatePlayerControlledEnergy: function(){
     // continuously update the energy requested by user controlled jump,
     // while the user keeps pressing "Fire"
     // we do this continuously, to be able to observe it in the energy bar
-    if (this.playerControl) {
-      // if we have a parasol: we don't use consume more energy
-      if (getAttachedEntities(this,"Parasol").length==0){
+    if (this.playerControl && this.goingUp && !this.playerControlledEnergyFrozen) {
         this.playerControlledEnergy = (this.yAtLiftOff - this._y) * this.weight;
       }
-    }
   },
   checkPeakReached: function () {
     // Check if we reached the peak and start going down
@@ -1458,14 +1456,40 @@ Crafty.c("KangarooPlayer", {
       this.playerJumpRequestLatchTime = new Date().getTime();
     }
   },
+  stopPlayerControl: function(){
+    // if effectively a player control was ongoing: stop it
+    if (this.playerControl) {
+      // stop the control
+      this.playerControl = false;
+      // consume the energy
+      // remove the used energy
+      // and keep at least enough energy for a default jump
+      this.energy = Math.max(
+        this.energy - this.playerControlledEnergy,
+        ENERGY_DEFAULT_JUMP);
+      // consume the player controlled energy
+      this.playerControlledEnergy=0;
+      // and make sure it is not frozen
+      this.playerControlledEnergyFrozen= false;
+      // fall quicker
+      this.fallQuicker();
+    }
+  },
   onPlayerJumpStopRequest: function () {
     // if a jump request was latched (ie jump not yet started)
     // then the latched request is discarded
     if (this.playerJumpRequestLatched) {
       this.playerJumpRequestLatched = false;
     }
-    // then effectively stop the jump
-    this.stopJump();
+    else {
+      // Stop parasol effect, if active
+      stopParasolEffect(this);
+      // if effectively a player control was ongoing: stop it
+      // Note that this must be called after stopping the parasol effect,
+      // to make sure that the default gravity ratio is used, and not the
+      // parasol one. This way, we fall quicker when releasing the Fire button
+      this.stopPlayerControl();
+    }
   },
   triggerRebounce: function () {
     Crafty.trigger("Rebounce", this);
@@ -1475,17 +1499,20 @@ Crafty.c("KangarooPlayer", {
 Crafty.bind("KeyDown", function (e) {
   // test game actions
   if (DEBUG) {
-    if (e.key == Crafty.keys.ADD) {
+    if ((e.key == Crafty.keys.ADD) ||
+        (e.key == Crafty.keys.RIGHT_ARROW)){
       // '+' in numeric keypad
       // increase speed
       changeSpeed(1.1);
       console.log("speed = ", speed);
-    } else if (e.key == Crafty.keys.SUBSTRACT) {
+    } else if ((e.key == Crafty.keys.SUBSTRACT) ||
+               (e.key == Crafty.keys.LEFT_ARROW)){
       // - on numpad
       // decrease speed
       changeSpeed(0.9);
       console.log("speed = ", speed);
-    } else if (e.key == Crafty.keys.MULTIPLY) {
+    } else if ((e.key == Crafty.keys.MULTIPLY)  ||
+               (e.key == Crafty.keys.DOWN_ARROW)){
       // * on numpad
       // mirror effect
       changeSpeed(-1.0);
