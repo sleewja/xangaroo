@@ -51,7 +51,7 @@ var TRACE_SIZE = 2; // size of trace blocks
 var POPULATE_WORLD_DISTANCE_STEP = 10; // pixel distance between two calls of populateWorld
 var PRE_POPULATE_DURATION = 60000; // milliseconds simulated in the past to prepopulate the world
 var DELAY_TO_DISAPPEAR = 5000; // milliseconds: delay to destroy a symbol after exiting the world on the left side, if z=0. if z<0: the delay will be longer
-var Y_DISAPPEAR = -50; // y position too far aboce: symbol is destroyed
+var Y_DISAPPEAR = -100; // y position too far aboce: symbol is destroyed
 var MESSAGE_Z_RANDOMNESS_PERCENT = 10; // +/- randomness on z for messages, to prevent from horizontal lines to be too obviously visible
 var PIXELS_PER_METER = 10; // scale to convert pixels into metres
 
@@ -72,7 +72,8 @@ var Z_PANEL = 1000; // in front, to hide objects behind
 // Characteristics of symbols hit actions
 var SCORPION_PAIN_SYMBOL_DURATION = 750; // milliseconds
 var SCORPION_ENERGY_DECREMENT = 150; // decrement energy when hitting a scorpion
-var PARASOL_GRAVITY_RATIO = 1; // shape of the jump when we have a parasol, see GRAVITY_RATIO_DEFAULT
+var PARASOL_GRAVITY_RATIO = 0.5; // shape of the jump when we have a parasol, see GRAVITY_RATIO_DEFAULT
+var PARASOL_GRAVITY_SOFT_LANDING = 50; // gravity applied when hitting a parasol on the way down
 
 var startTime;
 /** speed of the game, in pixels/seconds.
@@ -346,7 +347,12 @@ var assetsObj = {
       "tile": 19,
       "tileh": 15,
       "map": { "Pain": [0,0]}
-   }
+   },
+   "parasol.png": {
+     "tile": 29,
+     "tileh": 30,
+     "map": { "Parasol": [0,0]}
+  }
   },
 };
 
@@ -1133,8 +1139,8 @@ function onHitOnCactus(aCactusEntity,aHitDatas){
 function onHitOnParasol(aParasolEntity,aHitDatas){
   kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
   // attach parasol to kangaroo (above his head)
-  aParasolEntity.x = kangarooEntity._x + 10;
-  aParasolEntity.y = kangarooEntity._y -15;
+  aParasolEntity.x = kangarooEntity._x + 20;
+  aParasolEntity.y = kangarooEntity._y -25;
   // remove the Motion component since the parasol will now be attached to the kangaroo
   //aParasolEntity.removeComponent("Motion", false); // "false" means hard remove
   // the plan was to re-add this component later on, when we release the parasol.
@@ -1155,7 +1161,7 @@ function onHitOnParasol(aParasolEntity,aHitDatas){
     // does not work well...
     // workaround: set antigravity, then restart gravity
     kangarooEntity.antigravity();
-    kangarooEntity.gravityConst(50);
+    kangarooEntity.gravityConst(PARASOL_GRAVITY_SOFT_LANDING);
     kangarooEntity.gravity();
   }
 }
