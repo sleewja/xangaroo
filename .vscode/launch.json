@@ -10,6 +10,13 @@
             "request": "launch",
             "reAttach": true,
             "file": "${workspaceFolder}/index.html"
+        },
+        {
+            "name": "xangaroo_Chrome",
+            "type": "chrome",
+            "request": "launch",
+            "reAttach": true,
+            "file": "${workspaceFolder}/index.html"
         }
     ]
 }
