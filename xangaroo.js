@@ -263,8 +263,8 @@ var symbols = [
     distanceFirst: 0, // first distance to appear in the world
     distanceIntervalMin: 100, // min pixel distance between two
     distanceIntervalMax: 1000, // max pixel distance between two
-    yMin: 100,
-    yMax: Y_FLOOR - 50,
+    yMin: 70,
+    yMax: Y_FLOOR - 80,
     onHitOn: function (aEntity,hitDatas) {
       onHitOnParasol(aEntity,hitDatas);
     },
@@ -349,8 +349,8 @@ var assetsObj = {
       "map": { "Pain": [0,0]}
    },
    "parasol.png": {
-     "tile": 29,
-     "tileh": 30,
+     "tile": 39,
+     "tileh": 40,
      "map": { "Parasol": [0,0]}
   }
   },
@@ -1139,8 +1139,8 @@ function onHitOnCactus(aCactusEntity,aHitDatas){
 function onHitOnParasol(aParasolEntity,aHitDatas){
   kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
   // attach parasol to kangaroo (above his head)
-  aParasolEntity.x = kangarooEntity._x + 20;
-  aParasolEntity.y = kangarooEntity._y -25;
+  aParasolEntity.x = kangarooEntity._x + 13;
+  aParasolEntity.y = kangarooEntity._y -35;
   // remove the Motion component since the parasol will now be attached to the kangaroo
   //aParasolEntity.removeComponent("Motion", false); // "false" means hard remove
   // the plan was to re-add this component later on, when we release the parasol.
