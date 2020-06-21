@@ -26,6 +26,7 @@ var COLOR_ROCK = "crimson";
 var COLOR_ULURU = "peru";
 var COLOR_CACTUS = "forestgreen";
 var COLOR_PARASOL = "blue";
+var COLOR_FOOTBALL = "white";
 var COLOR_MESSAGE = "deepskyblue";
 var COLOR_KANGAROO = "darkorange";
 
@@ -112,7 +113,7 @@ var symbols = [
   },
   {
     // rocks in the background
-    components: ["Rock"], // Floor = support for gravity
+    components: ["Rock"],
     color: COLOR_ROCK,
     distanceIntervalMin: 0, // min pixel distance between two
     distanceIntervalMax: 200, // max pixel distance between two
@@ -171,7 +172,7 @@ var symbols = [
   },
   {
     // rocks in front of Kangaroo
-    components: ["Rock"], // Floor = support for gravity
+    components: ["Rock"],
     color: COLOR_ROCK,
     distanceIntervalMin: 20, // min pixel distance between two
     distanceIntervalMax: 300, // max pixel distance between two
@@ -272,10 +273,25 @@ var symbols = [
       [ // single
         { x: 0, y: 0 },
       ],
-      /*[ // star
-        { x: 0, y: 0 },{ x: 20, y: 0 },{ x: 10, y: -10 },{ x: 10, y: 10 },
-      ],*/
-
+    ]
+  },
+  {
+    components: ["Football"],
+    color: COLOR_FOOTBALL,
+    distanceFirst: 0, // first distance to appear in the world
+    distanceIntervalMin: 100, // min pixel distance between two
+    distanceIntervalMax: 1000, // max pixel distance between two
+    yMin: 70,
+    yMax: Y_FLOOR - 30,
+    zAtYMin: 1,
+    zAtYMax: 1,
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnFootball(aEntity,hitDatas);
+    },
+    patterns : [
+      [ // single
+        { x: 0, y: 0 },
+      ],
     ]
   },
   {
@@ -821,13 +837,15 @@ function createSymbol(aSymbol, aDistance){
           }
         })
         .bind("Move", function (e) {
-          // destroy the entity if it has moved too far away on the left border
+          // destroy the entity if it has moved too far away on the left or above
           if (isTooFarOutOfWorld(this._x, this.vx, this._y)) {
-            if (DEBUG && 0) {
-              console.log(
-                "destroy a " + aSymbol.components + " at x = ",
-                this._x
-              );
+            if (DEBUG) {
+              if (1 || this.has("Football") ){
+                console.log(
+                  "destroy a " + aSymbol.components + " at x = ",
+                  this._x
+                );
+              }
             }
             this.destroy();
           }
@@ -840,8 +858,6 @@ function createSymbol(aSymbol, aDistance){
           entity.color(aSymbol.color);
         } else {
           // most likely a sprite has been defined
-          // shrink size if further away
-          
           // define the collision polygon
           firstCustomComponent = aSymbol.components[0];
           if (firstCustomComponent in spritePolygons){
@@ -1132,7 +1148,7 @@ function onHitOnCactus(aCactusEntity,aHitDatas){
 }
 
 /**
- * Action on hitting a parasol: be lighter till next landing
+ * Action on hitting a parasol: fly higher and longer
  * @param {*} aParasolEntity 
  * @param {*} aHitDatas 
  */
@@ -1185,6 +1201,53 @@ function stopParasolEffect(kangarooEntity){
   });
   // and revert to normal gravity ratio
   kangarooEntity.gravityRatio = GRAVITY_RATIO_DEFAULT;
+}
+
+
+/**
+ * Action on hitting a football:
+ * @param {*} aFootballEntity 
+ * @param {*} aHitDatas 
+ */
+function onHitOnFootball(aFootballEntity,aHitDatas){
+  // check whether the ball hit a kangaroo, or a goal
+  // take only the first hit data: this should be the kangaroo or a goal
+  if (aHitDatas[0].obj.has("Kangaroo")){
+    // The ball hit a Kangaroo, or better said a Kangaroo hit the ball!
+    kangarooEntity = aHitDatas[0].obj;
+    // up to now the ball was floating in the sky. Now it's time to apply gravity to it
+    aFootballEntity.addComponent("Gravity");
+    aFootballEntity.gravityConst(kangarooEntity.currentGravity);
+    aFootballEntity.gravity("Floor");
+    // the jump must be enabled at all times, not only when on the floor
+    aFootballEntity.bind("CheckJumping", function(ground){
+      this.canJump=true;
+    });
+    // shoot the ball: do the same jump as the Kangaroo
+    aFootballEntity.addComponent("Jumper");
+    aFootballEntity.vx = speed;
+    aFootballEntity.ax = -speed/8;
+    aFootballEntity.jumpSpeed(kangarooEntity.currentJumpSpeed);
+    aFootballEntity.jump();
+    // and activate collision detection with goal and rocks, in addition to Kangaroo
+    aFootballEntity.checkHits("Kangaroo, Goal, Rock");
+    // stop the acceleration when the ball has reached a still stand
+    // (i.e. its vx is quasi equal to -speed), otherwise the ball
+    // starts moving backwards
+    aFootballEntity.bind("MotionChange", function(){
+      if (Math.abs(this.vx - (-speed) < 5.0)){
+        // glue to ground
+        this.vx = -speed;
+        this.ax = 0; // stop acceleration
+        this.unbind("MotionChange");
+        if(DEBUG){console.log("Glue a football to ground at x=", this._x);}
+      }
+    })
+
+  } else if (aHitDatas[0].obj.has("Rock")){
+    // the ball hit a rock: rebounce
+
+  }
 }
 
 // ***********************************************
