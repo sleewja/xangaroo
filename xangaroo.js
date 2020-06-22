@@ -1516,7 +1516,10 @@ Crafty.c("KangarooPlayer", {
     if(DEBUG&&0){console.log("in fallQuicker: new gravity = ", this.currentGravity);}
   },
   freezePlayerControlledEnergy: function(){
-    this.playerControlledEnergyFrozen = true;
+    // freeze the controlled energy, if we are in a controlled jump
+    if (this.playerControl){
+      this.playerControlledEnergyFrozen = true;
+    }
   },
   updatePlayerControlledEnergy: function(){
     // continuously update the energy requested by user controlled jump,
