@@ -1265,10 +1265,8 @@ function onHitOnFootball(aFootballEntity,aHitDatas){
       // stop the acceleration when the ball has reached a still stand
       // (i.e. its vx is quasi equal to -speed), otherwise the ball
       // starts moving backwards
-      if ( // speed positive, ie world moves leftwards
-           ((Math.sign(speed) == 1)  && (this.vx < -speed + 10.0)) ||
-           // speed negative; ie world moves rightwards
-           ((Math.sign(speed) == -1) && (this.vx > -speed - 10.0))){
+      absoluteBallSpeed = this.vx + speed;
+      if ( Math.abs(absoluteBallSpeed) < 10) {
         // glue to ground
         this.vx = -speed;
         this.ax = 0; // stop acceleration
@@ -1287,7 +1285,7 @@ function onHitOnFootball(aFootballEntity,aHitDatas){
           this.rotation += (absoluteMotionX / (2 * Math.PI * ballRadius) * 360);
         }
       }
-    })
+    });
 
   } else if (aHitDatas[0].obj.has("Goal")){
     // the ball hit a rock: rebounce
