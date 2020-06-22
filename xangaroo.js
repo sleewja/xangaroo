@@ -52,7 +52,8 @@ var TRACE_SIZE = 2; // size of trace blocks
 var POPULATE_WORLD_DISTANCE_STEP = 10; // pixel distance between two calls of populateWorld
 var PRE_POPULATE_DURATION = 60000; // milliseconds simulated in the past to prepopulate the world
 var DELAY_TO_DISAPPEAR = 5000; // milliseconds: delay to destroy a symbol after exiting the world on the left side, if z=0. if z<0: the delay will be longer
-var Y_DISAPPEAR = -100; // y position too far aboce: symbol is destroyed
+var Y_DISAPPEAR_TOP = -100; // y position too far above: symbol is destroyed
+var Y_DISAPPEAR_BOTTOM = WORLD_HEIGHT + 100; // y too far below: symbol must be destroyed
 var MESSAGE_Z_RANDOMNESS_PERCENT = 10; // +/- randomness on z for messages, to prevent from horizontal lines to be too obviously visible
 var PIXELS_PER_METER = 10; // scale to convert pixels into metres
 
@@ -129,8 +130,8 @@ var symbols = [
     distanceFirst: 500,
     distanceIntervalMin: 20, // min pixel distance between two
     distanceIntervalMax: 400, // max pixel distance between two
-    yMin: Y_FLOOR - 22,
-    yMax: Y_FLOOR - 17,
+    yMin: Y_FLOOR - 19,
+    yMax: Y_FLOOR - 19,
     onHitOn: function (aEntity,hitDatas) {
       onHitOnRock(aEntity,hitDatas);
     },
@@ -141,11 +142,11 @@ var symbols = [
       ],
       [
         // 3 rocks - height 2, 
-        { x: 0, y: 0 },{ x: 15, y: 2 },{ x: 10, y: -12 }
+        { x: 0, y: -2 },{ x: 15, y: 0 },{ x: 10, y: -14 }
       ],
       [
         // height 3
-        { x: 0, y: 0 }, {x: 17,y:2},{x:34,y:3}, {x:10,y:-12}, {x:27,y:-11},{x:23,y:-25}
+        { x: 0, y: -3 }, {x: 17,y:-1},{x:34,y:0}, {x:10,y:-15}, {x:27,y:-14},{x:23,y:-28}
       ],
     ],
   },
@@ -156,8 +157,8 @@ var symbols = [
     distanceFirst: 2000,
     distanceIntervalMin: 500, // min pixel distance between two
     distanceIntervalMax: 3000, // max pixel distance between two
-    yMin: Y_FLOOR - 22,
-    yMax: Y_FLOOR - 17,
+    yMin: Y_FLOOR - 19,
+    yMax: Y_FLOOR - 19,
     onHitOn: function (aEntity,hitDatas) {
       onHitOnRock(aEntity,hitDatas);
     },
@@ -283,7 +284,7 @@ var symbols = [
     distanceIntervalMax: 1000, // max pixel distance between two
     yMin: 70,
     yMax: Y_FLOOR - 30,
-    zAtYMin: 1,
+    zAtYMin: 1, // in front of symbols
     zAtYMax: 1,
     onHitOn: function (aEntity,hitDatas) {
       onHitOnFootball(aEntity,hitDatas);
@@ -348,7 +349,7 @@ var assetsObj = {
         "tile": 10,
         "tileh": 10,
         "map": { "CactusHit": [0,0]}
-     },
+      },
       "rock.png": {
         "tile": 20,
         "tileh": 19,
@@ -358,17 +359,22 @@ var assetsObj = {
         "tile": 58,
         "tileh": 20,
         "map": { "Uluru": [0,0]}
-    },
-    "pain.png": {
-      "tile": 19,
-      "tileh": 15,
-      "map": { "Pain": [0,0]}
-   },
-   "parasol.png": {
-     "tile": 39,
-     "tileh": 40,
-     "map": { "Parasol": [0,0]}
-  }
+      },
+      "pain.png": {
+        "tile": 19,
+        "tileh": 15,
+        "map": { "Pain": [0,0]}
+      },
+      "parasol.png": {
+        "tile": 39,
+        "tileh": 40,
+        "map": { "Parasol": [0,0]}
+      },
+      "football.png": {
+        "tile": 15,
+        "tileh": 15,
+        "map": { "Football": [0,0]}
+      }
   },
 };
 
@@ -408,11 +414,16 @@ Crafty.load(assetsObj, // preload assets
 // draw initial world
 function drawWorld() {
   // floor
+  // extend the floor outside of the view, to keep the footballs on the ground,
+  // otherwise they fall off
+  extensionLength = SPEED_START*DELAY_TO_DISAPPEAR/1000;
   Crafty.e("2D, Canvas, Color, Floor")
     .attr({
-      x: LEFT_MARGIN,
+      x: LEFT_MARGIN - extensionLength,
       y: Y_FLOOR,
-      w: CANVAS_WIDTH,
+      // keep a bit of margin to hold the balls, but not too much otherwise we keep
+      // shooting on the same balls over and over again
+      w: CANVAS_WIDTH + 2*extensionLength,
       h: FLOOR_HEIGHT,
       z: Z_BACKGROUND,
     })
@@ -651,7 +662,7 @@ function changeSpeed(aSpeedMultiplier) {
 
       if (!entity.has("Kangaroo") && !isAttachedToKangaroo) {
         // visual speed of the entity if it was fixed:
-        visualSpeedIfEntityFixed = calculateVisualSpeed(-prevSpeed, entity.z);
+        visualSpeedIfEntityFixed = calculateVisualSpeed(-prevSpeed, entity._z);
         // deduce the absolute horizontal speed of the entity
         // visual speed = visualSpeedIfEntityFixed + visualSpeedIfObserverFixed
         visualSpeedIfObserverFixed = entity.vx - visualSpeedIfEntityFixed
@@ -717,14 +728,17 @@ function updateTraces() {
   }
 }
 
-/** Check if a symbol is too far left outside of the world or too high above, and must be destroyed
+/** Check if a symbol is too far left outside of the world or too high above,
+ * or too low (typically happens for footballs falling beyond the floor)
+ * and must be destroyed
  * @param x the x position
  * @param vx the horizontal velocity (typically negative)
  * @param y the y position
  */
 function isTooFarOutOfWorld(x, vx, y) {
   return (x < LEFT_MARGIN - Math.abs(vx) * (DELAY_TO_DISAPPEAR / 1000))
-    || (y < Y_DISAPPEAR);
+    || (y < Y_DISAPPEAR_TOP)
+    || (y > Y_DISAPPEAR_BOTTOM);
 }
 
 
@@ -839,13 +853,11 @@ function createSymbol(aSymbol, aDistance){
         .bind("Move", function (e) {
           // destroy the entity if it has moved too far away on the left or above
           if (isTooFarOutOfWorld(this._x, this.vx, this._y)) {
-            if (DEBUG) {
-              if (1 || this.has("Football") ){
+            if (DEBUG&&0) {
                 console.log(
                   "destroy a " + aSymbol.components + " at x = ",
                   this._x
                 );
-              }
             }
             this.destroy();
           }
@@ -1217,34 +1229,67 @@ function onHitOnFootball(aFootballEntity,aHitDatas){
     kangarooEntity = aHitDatas[0].obj;
     // up to now the ball was floating in the sky. Now it's time to apply gravity to it
     aFootballEntity.addComponent("Gravity");
-    aFootballEntity.gravityConst(kangarooEntity.currentGravity);
+    // shoot the ball
+    // aim towards the top of the screen at the right border
+    // at low speed we lob, at high speed we shoot straight
+    shootPower = 4 * speed;
+    yTarget = -150 + speed;
+    distanceToTarget = CANVAS_WIDTH - X_KANGAROO;
+    absoluteShootSpeedX = shootPower; // absolute speed
+    aFootballEntity.vx = absoluteShootSpeedX - speed; // observed speed
+    absoluteShootSpeedY = -(aFootballEntity._y - yTarget)*
+      Math.abs(absoluteShootSpeedX) / distanceToTarget;
+    aFootballEntity.ax = -absoluteShootSpeedX/10;
+    aFootballEntity.vy = absoluteShootSpeedY;
+    if(DEBUG){
+      console.log("shoot: vx=", aFootballEntity.vx," vy=", aFootballEntity.vy, " ax=",aFootballEntity.ax);
+    }
+    aFootballEntity.gravityConst(300);
     aFootballEntity.gravity("Floor");
-    // the jump must be enabled at all times, not only when on the floor
-    aFootballEntity.bind("CheckJumping", function(ground){
-      this.canJump=true;
+
+    // and activate collision detection with goal, in addition to Kangaroo
+    aFootballEntity.checkHits("Kangaroo, Goal");
+
+    // decelerate a lot the ball once landed
+    aFootballEntity.one("LandedOnGround", function(){
+      this.ax *= 5; // decelerate quicker
+      if(DEBUG){
+        console.log("football decelerates: vx=", this.vx," vy=", this.vy, " ax=",this.ax);
+      }
     });
-    // shoot the ball: do the same jump as the Kangaroo
-    aFootballEntity.addComponent("Jumper");
-    aFootballEntity.vx = speed;
-    aFootballEntity.ax = -speed/8;
-    aFootballEntity.jumpSpeed(kangarooEntity.currentJumpSpeed);
-    aFootballEntity.jump();
-    // and activate collision detection with goal and rocks, in addition to Kangaroo
-    aFootballEntity.checkHits("Kangaroo, Goal, Rock");
-    // stop the acceleration when the ball has reached a still stand
-    // (i.e. its vx is quasi equal to -speed), otherwise the ball
-    // starts moving backwards
-    aFootballEntity.bind("MotionChange", function(){
-      if (Math.abs(this.vx - (-speed) < 5.0)){
+
+    // set the origin for rotation
+    aFootballEntity.origin("center");
+    ballRadius = (aFootballEntity.w+1) / 2;
+    aFootballEntity.bind("EnterFrame", function(){
+      // stop the acceleration when the ball has reached a still stand
+      // (i.e. its vx is quasi equal to -speed), otherwise the ball
+      // starts moving backwards
+      if ( // speed positive, ie world moves leftwards
+           ((Math.sign(speed) == 1)  && (this.vx < -speed + 10.0)) ||
+           // speed negative; ie world moves rightwards
+           ((Math.sign(speed) == -1) && (this.vx > -speed - 10.0))){
         // glue to ground
         this.vx = -speed;
         this.ax = 0; // stop acceleration
-        this.unbind("MotionChange");
-        if(DEBUG){console.log("Glue a football to ground at x=", this._x);}
+        this.unbind("EnterFrame");
+        // CAUTION: If I use UpdateFrame instead of EnterFrame, it does not work: the ball
+        // stops and does not move anymore on the screeen
+      }
+      else {
+        // make the ball roll
+        if (this.motionDelta().y != 0){
+          // if in the air (still moving about y axis): roll in function of x move, but not too much
+          this.rotation += this.motionDelta().x;
+        } else { 
+          // if on the ground: roll on the ground
+          absoluteMotionX = this.motionDelta().x + speed/Crafty.timer.FPS();
+          this.rotation += (absoluteMotionX / (2 * Math.PI * ballRadius) * 360);
+        }
       }
     })
 
-  } else if (aHitDatas[0].obj.has("Rock")){
+  } else if (aHitDatas[0].obj.has("Goal")){
     // the ball hit a rock: rebounce
 
   }
