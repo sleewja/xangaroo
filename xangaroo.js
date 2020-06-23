@@ -27,6 +27,7 @@ var COLOR_ULURU = "peru";
 var COLOR_CACTUS = "forestgreen";
 var COLOR_PARASOL = "blue";
 var COLOR_FOOTBALL = "white";
+var COLOR_GOAL = "darkgray";
 var COLOR_MESSAGE = "deepskyblue";
 var COLOR_KANGAROO = "darkorange";
 
@@ -76,6 +77,8 @@ var SCORPION_PAIN_SYMBOL_DURATION = 750; // milliseconds
 var SCORPION_ENERGY_DECREMENT = 150; // decrement energy when hitting a scorpion
 var PARASOL_GRAVITY_RATIO = 0.5; // shape of the jump when we have a parasol, see GRAVITY_RATIO_DEFAULT
 var PARASOL_GRAVITY_SOFT_LANDING = 50; // gravity applied when hitting a parasol on the way down
+var GOAL_BUBBLE_DURATION = 2500; // milliseconds
+var GOAL_ENERGY_INCREMENT = 150; // energy increment when scoring a goal
 
 var startTime;
 /** speed of the game, in pixels/seconds.
@@ -95,7 +98,7 @@ var symbols = [
     components: ["Cloud"],
     color: COLOR_CLOUD,
     // distanceFirst : 0,  if omitted: means that it will be pre-populated
-    // distanceLast  if omitted: no limit
+    // distanceMax  if omitted: no limit
     distanceIntervalMin: 0, // min pixel distance between two    if omitted: no repetition
     distanceIntervalMax: 200, // max pixel distance between two  if omitted: no repetition
     yMin: -20,
@@ -296,6 +299,22 @@ var symbols = [
     ]
   },
   {
+    components: ["Goal"],
+    color: COLOR_GOAL,
+    distanceFirst: 0, // first distance to appear in the world
+    distanceIntervalMin: 300, // min pixel distance between two
+    distanceIntervalMax: 1000, // max pixel distance between two
+    yMin: 50,
+    yMax: Y_FLOOR - 80,
+    zAtYMin: 0, // in front of symbols
+    zAtYMax: 0,
+    /*patterns : [
+      [ // goal
+        { x: 0, y: 0 },{ x: 0, y: -10 },{ x: 0, y: -20 },{ x: 10, y: -20 },{ x: 20, y: -20 },{ x: 30, y: -20 },{ x: 40, y: -20 },{ x: 40, y: -10 },{ x: 40, y: 0 },
+      ],
+    ]*/
+  },
+  {
     components: ["Message"],
     color: COLOR_MESSAGE,
     
@@ -374,6 +393,21 @@ var assetsObj = {
         "tile": 15,
         "tileh": 15,
         "map": { "Football": [0,0]}
+      },
+      "goal.png": {
+        "tile": 50,
+        "tileh": 30,
+        "map": { "Goal": [0,0]}
+      },
+      "goal_bubble.png": {
+        "tile": 60,
+        "tileh": 50,
+        "map": { "GoalBubble": [0,0]}
+      },
+      "goal_text.png": {
+        "tile": 71,
+        "tileh": 26,
+        "map": { "GoalText": [0,0]}
       }
   },
 };
@@ -907,8 +941,8 @@ function populateWorld() {
       }
     }
     // stop if we have reached the distance max for this symbol
-    if ("distanceLast" in symbol){
-      if (distance > symbol.distanceLast){
+    if ("distanceMax" in symbol){
+      if (distance > symbol.distanceMax){
         symbol.continue = false;
       }
     }
@@ -1241,7 +1275,7 @@ function onHitOnFootball(aFootballEntity,aHitDatas){
       Math.abs(absoluteShootSpeedX) / distanceToTarget;
     aFootballEntity.ax = -absoluteShootSpeedX/10;
     aFootballEntity.vy = absoluteShootSpeedY;
-    if(DEBUG){
+    if(DEBUG && 0){
       console.log("shoot: vx=", aFootballEntity.vx," vy=", aFootballEntity.vy, " ax=",aFootballEntity.ax);
     }
     aFootballEntity.gravityConst(300);
@@ -1253,7 +1287,7 @@ function onHitOnFootball(aFootballEntity,aHitDatas){
     // decelerate a lot the ball once landed
     aFootballEntity.one("LandedOnGround", function(){
       this.ax *= 5; // decelerate quicker
-      if(DEBUG){
+      if(DEBUG && 0){
         console.log("football decelerates: vx=", this.vx," vy=", this.vy, " ax=",this.ax);
       }
     });
@@ -1288,8 +1322,49 @@ function onHitOnFootball(aFootballEntity,aHitDatas){
     });
 
   } else if (aHitDatas[0].obj.has("Goal")){
-    // the ball hit a rock: rebounce
+    goalEntity = aHitDatas[0].obj;
+    // the ball hit a goal: bingo!!
+    // glue the ball to the goal
+    aFootballEntity.antigravity();
+    aFootballEntity.resetMotion();
+    aFootballEntity.vx = -speed;
+    
+    // Attach goal bubble to kangaroo
+    var goalBubble = Crafty.e("2D, Canvas, GoalBubble")
+    .attr({
+      x: kangarooEntity._x + 50,
+      y: kangarooEntity._y - 30,
+      z: Z_KANGAROO,
+    });
+    kangarooEntity.attach(goalBubble);
+    // Schedule its destruction
+    Crafty.e("Delay").delay(
+      function(){
+        Crafty("GoalBubble").destroy();
+      },
+      GOAL_BUBBLE_DURATION,
+      0
+    );
 
+    // Attach goal text to the goal
+    var goalText = Crafty.e("2D, Canvas, GoalText")
+    .attr({
+      x: goalEntity._x -10,
+      y: goalEntity._y - 30,
+      z: goalEntity._z,
+    });
+    goalEntity.attach(goalText);
+    // Schedule its destruction
+    Crafty.e("Delay").delay(
+      function(){
+        Crafty("GoalText").destroy();
+      },
+      GOAL_BUBBLE_DURATION,
+      0
+    );
+
+    // and increase energy
+    kangarooEntity.energy += GOAL_ENERGY_INCREMENT
   }
 }
 
@@ -1423,7 +1498,8 @@ Crafty.c("KangarooPlayer", {
         // the new jump is requested by the player
         // use the full energy reserve at start of jump, divided by the weigth
         // (if we are heavier, we'll not jump as high)
-        this.currentTargetHeight = this.energy / this.weight;
+        // and limited to the top of the screen, not higher
+        this.currentTargetHeight = Math.min(this.energy / this.weight,this.y);
         this.playerControl = true;
       } else {
         // the new jump is a default jump
@@ -1570,6 +1646,15 @@ Crafty.c("KangarooPlayer", {
       this.playerJumpRequestLatched = true;
       this.playerJumpRequestLatchTime = new Date().getTime();
     }
+    // Use also the "FIRE" to release a parasol, if we are not (anymore)
+    // controlling the jump. If we are controlling the jump, then releasing
+    // the FIRE button releases the parasolo. Here, we also want to enable
+    // the user to release the parasol.
+    if (!this.playerControl && 
+        getAttachedEntities(this, "Parasol").length > 0){
+          stopParasolEffect(this);
+          this.fallQuicker();
+        }
   },
   stopPlayerControl: function(){
     // if effectively a player control was ongoing: stop it
