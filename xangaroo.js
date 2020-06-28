@@ -77,7 +77,7 @@ var Z_PANEL = 1000; // in front, to hide objects behind
 var SCORPION_PAIN_SYMBOL_DURATION = 750; // milliseconds
 var SCORPION_ENERGY_DECREMENT = 150; // decrement energy when hitting a scorpion
 var PARASOL_GRAVITY_RATIO = 0.5; // shape of the jump when we have a parasol, see GRAVITY_RATIO_DEFAULT
-var PARASOL_GRAVITY_SOFT_LANDING = 50; // gravity applied when hitting a parasol on the way down
+var PARASOL_GRAVITY_FALL = 20; // gravity applied in "startFall" falling down
 var PARASOL_JUMP_RATIO = 0.3; // shape of the jump: jump height / jump distance
 var GOAL_BUBBLE_DURATION = 2500; // milliseconds
 var GOAL_ENERGY_INCREMENT = 150; // energy increment when scoring a goal
@@ -270,7 +270,7 @@ var symbols = [
     distanceFirst: 0, // first distance to appear in the world
     distanceIntervalMin: 100, // min pixel distance between two
     distanceIntervalMax: 1000, // max pixel distance between two
-    yMin: 70,
+    yMin: 80,
     yMax: Y_FLOOR - 80,
     onHitOn: function (aEntity,hitDatas) {
       onHitOnParasol(aEntity,hitDatas);
@@ -1221,22 +1221,6 @@ function onHitOnParasol(aParasolEntity,aHitDatas){
   kangarooEntity.freezePlayerControlledEnergy();
   // jump to the top of the world
   kangarooEntity.startJump(kangarooEntity._y,PARASOL_JUMP_RATIO);
-  // and jump further by elongating the jump
-  kangarooEntity.gravityRatio = PARASOL_GRAVITY_RATIO;
-
-
-  /*// if going up: re-jump, and jump further by elongating the jump
-  if (kangarooEntity.goingUp){
-    kangarooEntity.jump();
-    kangarooEntity.gravityRatio = PARASOL_GRAVITY_RATIO;
-  } else {
-    // going down: set a very low gravity to make the jump longer
-    // does not work well...
-    // workaround: set antigravity, then restart gravity
-    kangarooEntity.antigravity();
-    kangarooEntity.gravityConst(PARASOL_GRAVITY_SOFT_LANDING);
-    kangarooEntity.gravity();
-  }*/
 }
 
 /**
@@ -1594,11 +1578,18 @@ Crafty.c("KangarooPlayer", {
     this.jump();
   },
   startFall: function() {
-    //  start falling down by increasing the gravity
-    this.currentGravity *= this.gravityRatio;
-    if (this.currentGravity > GRAVITY_MAX){
-      this.currentGravity = GRAVITY_MAX;
+    // Check if the kangaroo has a parasol
+    if (getAttachedEntities(this, "Parasol").length > 0){
+      // if yes: apply the parasol "fall" gravity
+      this.currentGravity = PARASOL_GRAVITY_FALL;
+    } else {
+      //  start falling down by increasing the gravity
+      this.currentGravity *= this.gravityRatio;
+      if (this.currentGravity > GRAVITY_MAX){
+        this.currentGravity = GRAVITY_MAX;
+      }
     }
+
     this.gravityConst(this.currentGravity);
     if(DEBUG){console.log("in startFall: new gravity = ", this.currentGravity);}
   },
