@@ -41,12 +41,13 @@ var ACCEPTANCE_DELAY_BEFORE_LANDING = 500; // milliseconds, delay to accept play
 var ACCEPTANCE_DELAY_AFTER_LANDING = 0; // milliseconds, delay between landing and rebounce where we stay on the ground, to allow player to fire the jump
 var ACCEPTANCE_DELAY_AFTER_LIFTOFF = 300; // milliseconds, delay to accept player jump request after a jump has started
 var JUMP_RANDOMNESS_PERCENT = 0; // +/- randomness on jump height and distance; 0 means no randomness
-var JUMP_RATIO = 0.5; // shape of the jump: jump height / jump distance
+var JUMP_RATIO_DEFAULT = 0.5; // shape of the jump: jump height / jump distance
 var GRAVITY_RATIO_DEFAULT = 5; // shape of the jump: gravity multiplication factor when going down
 // >1.0 for heavy fall, <1.0 for lighter and longer fall
 // riseTime/fallTime = sqrt(GRAVITY_RATIO)
 /** max gravity */
 var GRAVITY_MAX = 1000;
+var GRAVITY_FAST_FALL = 500;
 var TRACE_FRAME_STEP = 2; // number of frames between each trace update
 var TRACE_MAX_COUNT = 100; // max number of traces to remember
 var TRACE_SIZE = 2; // size of trace blocks
@@ -77,6 +78,7 @@ var SCORPION_PAIN_SYMBOL_DURATION = 750; // milliseconds
 var SCORPION_ENERGY_DECREMENT = 150; // decrement energy when hitting a scorpion
 var PARASOL_GRAVITY_RATIO = 0.5; // shape of the jump when we have a parasol, see GRAVITY_RATIO_DEFAULT
 var PARASOL_GRAVITY_SOFT_LANDING = 50; // gravity applied when hitting a parasol on the way down
+var PARASOL_JUMP_RATIO = 0.3; // shape of the jump: jump height / jump distance
 var GOAL_BUBBLE_DURATION = 2500; // milliseconds
 var GOAL_ENERGY_INCREMENT = 150; // energy increment when scoring a goal
 
@@ -425,6 +427,9 @@ var spritePolygons = {
   Rock: new Crafty.polygon(
     0,7, 5,0, 15,0, 19,8, 19,18, 0,18
   ),
+  Goal: new Crafty.polygon(
+    10,10, 40,10, 40,20, 10,20
+  ),
 }
 
 Crafty.init(CANVAS_WIDTH, CANVAS_HEIGHT, document.getElementById("xangaroo"));
@@ -500,7 +505,7 @@ function drawWorld() {
       if(DEBUG){console.log("Hit the stratosphere");}
       // make the kangaroo start falling quicker
       hitDatas.forEach(function(hitData){
-        hitData.obj.fallQuicker();
+        hitData.obj.startFall();
       })
     });
 
@@ -1214,7 +1219,13 @@ function onHitOnParasol(aParasolEntity,aHitDatas){
   kangarooEntity.attach(aParasolEntity);
   // freeze the controlled energy: it's the parasol now which carries us!
   kangarooEntity.freezePlayerControlledEnergy();
-  // if going up: re-jump, and jump further by elongating the jump
+  // jump to the top of the world
+  kangarooEntity.startJump(kangarooEntity._y,PARASOL_JUMP_RATIO);
+  // and jump further by elongating the jump
+  kangarooEntity.gravityRatio = PARASOL_GRAVITY_RATIO;
+
+
+  /*// if going up: re-jump, and jump further by elongating the jump
   if (kangarooEntity.goingUp){
     kangarooEntity.jump();
     kangarooEntity.gravityRatio = PARASOL_GRAVITY_RATIO;
@@ -1225,7 +1236,7 @@ function onHitOnParasol(aParasolEntity,aHitDatas){
     kangarooEntity.antigravity();
     kangarooEntity.gravityConst(PARASOL_GRAVITY_SOFT_LANDING);
     kangarooEntity.gravity();
-  }
+  }*/
 }
 
 /**
@@ -1508,7 +1519,7 @@ Crafty.c("KangarooPlayer", {
         this.currentTargetHeight = Math.min(ENERGY_DEFAULT_JUMP, this.energy);
         this.playerControl = false;
       }
-      this.startJump(this.currentTargetHeight);
+      this.startJump(this.currentTargetHeight, JUMP_RATIO_DEFAULT);
 
       // indicate that we are going up
       this.yAtLiftOff = this._y;
@@ -1537,7 +1548,7 @@ Crafty.c("KangarooPlayer", {
         );
       }
       // fall quicker (we fall quicker than we rise, to give a more natural feeling)
-      this.fallQuicker();
+      this.startFall();
     },
   }, // end of events
   // start of methods
@@ -1558,14 +1569,14 @@ Crafty.c("KangarooPlayer", {
       0
     );
   },
-  startJump: function (aTargetHeight) {
+  startJump: function (aTargetHeight, aJumpRatio) {
     // introduce some randomness in the jump height
     randomFactor =
       1 -
       JUMP_RANDOMNESS_PERCENT / 100 +
       Math.random() * ((2 * JUMP_RANDOMNESS_PERCENT) / 100);
     heightOfJump = aTargetHeight * randomFactor;
-    distanceOfJump = heightOfJump / JUMP_RATIO;
+    distanceOfJump = heightOfJump / aJumpRatio;
     [initialJumpSpeed, gravity] = calculateJump(heightOfJump, distanceOfJump, this.gravityRatio);
     if (DEBUG&&0) {
       console.log(
@@ -1582,14 +1593,19 @@ Crafty.c("KangarooPlayer", {
     // and now: jump !
     this.jump();
   },
-  fallQuicker: function () {
+  startFall: function() {
     //  start falling down by increasing the gravity
     this.currentGravity *= this.gravityRatio;
     if (this.currentGravity > GRAVITY_MAX){
       this.currentGravity = GRAVITY_MAX;
     }
     this.gravityConst(this.currentGravity);
-    if(DEBUG&&0){console.log("in fallQuicker: new gravity = ", this.currentGravity);}
+    if(DEBUG){console.log("in startFall: new gravity = ", this.currentGravity);}
+  },
+  fallQuicker: function () {
+    // precipitate the fall, using a constant gravity
+    this.currentGravity = GRAVITY_FAST_FALL;
+    this.gravityConst(this.currentGravity);
   },
   freezePlayerControlledEnergy: function(){
     // freeze the controlled energy, if we are in a controlled jump
@@ -1635,7 +1651,7 @@ Crafty.c("KangarooPlayer", {
           this.playerControl = true;
           // and "re-jump" towards the new target
           this.currentTargetHeight = newTargetAltitude;
-          this.startJump(this.currentTargetHeight - altitudeFromLiftOff);
+          this.startJump(this.currentTargetHeight - altitudeFromLiftOff, JUMP_RATIO_DEFAULT);
         }
       }
     }
@@ -1648,7 +1664,7 @@ Crafty.c("KangarooPlayer", {
     }
     // Use also the "FIRE" to release a parasol, if we are not (anymore)
     // controlling the jump. If we are controlling the jump, then releasing
-    // the FIRE button releases the parasolo. Here, we also want to enable
+    // the FIRE button releases the parasol. Here, we also want to enable
     // the user to release the parasol.
     if (!this.playerControl && 
         getAttachedEntities(this, "Parasol").length > 0){
