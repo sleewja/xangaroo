@@ -310,11 +310,38 @@ var symbols = [
     yMax: Y_FLOOR - 80,
     zAtYMin: 0, // in front of symbols
     zAtYMax: 0,
-    /*patterns : [
-      [ // goal
-        { x: 0, y: 0 },{ x: 0, y: -10 },{ x: 0, y: -20 },{ x: 10, y: -20 },{ x: 20, y: -20 },{ x: 30, y: -20 },{ x: 40, y: -20 },{ x: 40, y: -10 },{ x: 40, y: 0 },
+  },
+  {
+    components: ["Chilli"],
+    distanceFirst: 100, // first distance to appear in the world
+    distanceIntervalMin: 100, // min pixel distance between two
+    distanceIntervalMax: 1000, // max pixel distance between two
+    yMin: 80,
+    yMax: Y_FLOOR - 80,
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnChilli(aEntity,hitDatas);
+    },
+    patterns : [
+      [ // single
+        { x: 0, y: 0 },
       ],
-    ]*/
+    ]
+  },
+  {
+    components: ["Cauliflower"],
+    distanceFirst: 100, // first distance to appear in the world
+    distanceIntervalMin: 100, // min pixel distance between two
+    distanceIntervalMax: 1000, // max pixel distance between two
+    yMin: 80,
+    yMax: Y_FLOOR - 80,
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnCauliflower(aEntity,hitDatas);
+    },
+    patterns : [
+      [ // single
+        { x: 0, y: 0 },
+      ],
+    ]
   },
   {
     components: ["Message"],
@@ -410,7 +437,28 @@ var assetsObj = {
         "tile": 71,
         "tileh": 26,
         "map": { "GoalText": [0,0]}
+      },
+      "chilli.png": {
+        "tile": 20,
+        "tileh": 30,
+        "map": { "Chilli": [0,0]}
+      },
+      "cauliflower.png": {
+        "tile": 20,
+        "tileh": 30,
+        "map": { "Cauliflower": [0,0]}
+      },
+      "hamburger.png": {
+        "tile": 44,
+        "tileh": 30,
+        "map": { "Hamburger": [0,0]}
+      },
+      "hamburgerhit.png": {
+        "tile": 44,
+        "tileh": 30,
+        "map": { "HamburgerHit": [0,0]}
       }
+
   },
 };
 
@@ -1239,6 +1287,7 @@ function stopParasolEffect(kangarooEntity){
     parasolEntity.vx = -speed;
     parasolEntity.vy = -10;
     parasolEntity.ay = -20;
+    // will be destroyed when isTooFarOutOfWorld() returns true 
   });
   // and revert to normal gravity ratio
   kangarooEntity.gravityRatio = GRAVITY_RATIO_DEFAULT;
@@ -1362,6 +1411,47 @@ function onHitOnFootball(aFootballEntity,aHitDatas){
     kangarooEntity.energy += GOAL_ENERGY_INCREMENT
   }
 }
+
+
+/**
+ * Action on hitting a chilli: accelerate by 1kph
+ * @param {*} aChilliEntity 
+ * @param {*} aHitDatas 
+ */
+function onHitOnChilli(aChilliEntity,aHitDatas){
+  // accelerate by 1kph
+  // convert one kph into speed in pixels/second
+  oneKph = PIXELS_PER_METER*1000 / (60*60);
+  newSpeed = Math.sign(speed)*(Math.abs(speed) + oneKph);
+  multiplicationFactor = newSpeed / speed;
+  changeSpeed(multiplicationFactor);
+  // and make the chilli disappear (fly away)
+  aChilliEntity.vy = -60;
+  aChilliEntity.ay = -100;
+  // will be destroyed when isTooFarOutOfWorld() returns true
+}
+
+/**
+ * Action on hitting a cauliflower: decelerate by 1kph
+ * @param {*} aCauliflowerEntity 
+ * @param {*} aHitDatas 
+ */
+function onHitOnCauliflower(aCauliflowerEntity,aHitDatas){
+  // decelerate by 1kph
+  // convert one kph into speed in pixels/second
+  oneKph = PIXELS_PER_METER*1000 / (60*60);
+  // decelerate only if we are >= 2kph
+  if (Math.abs(speed) >= 2*oneKph){
+    newSpeed = Math.sign(speed)*(Math.abs(speed) - oneKph);
+    multiplicationFactor = newSpeed / speed;
+    changeSpeed(multiplicationFactor);
+  }
+  // and make the cauliflower disappear (fly away)
+  aCauliflowerEntity.vy = -60;
+  aCauliflowerEntity.ay = -100;
+  // will be destroyed when isTooFarOutOfWorld() returns true
+}
+
 
 // ***********************************************
 // game logic
