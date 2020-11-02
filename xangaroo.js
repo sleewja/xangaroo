@@ -31,6 +31,7 @@ var COLOR_GOAL = "darkgray";
 var COLOR_MESSAGE = "deepskyblue";
 var COLOR_KANGAROO = "darkorange";
 
+var SPEED_MIN = 40;
 var SPEED_START = 60; // initial speed, in pixels/second
 var ENERGY_START = 25; // energy = height in pixels of the jump
 var ENERGY_MIN = 10;
@@ -81,6 +82,8 @@ var PARASOL_GRAVITY_FALL = 20; // gravity applied in "startFall" falling down
 var PARASOL_JUMP_RATIO = 0.3; // shape of the jump: jump height / jump distance
 var GOAL_BUBBLE_DURATION = 2500; // milliseconds
 var GOAL_ENERGY_INCREMENT = 150; // energy increment when scoring a goal
+var CHILLI_BUBBLE_DURATION = 1000; // milliseconds
+var CAULIFLOWER_BUBBLE_DURATION = 1000; // milliseconds
 
 var startTime;
 /** speed of the game, in pixels/seconds.
@@ -443,10 +446,20 @@ var assetsObj = {
         "tileh": 30,
         "map": { "Chilli": [0,0]}
       },
+      "chilli_bubble.png": {
+        "tile": 60,
+        "tileh": 50,
+        "map": { "ChilliBubble": [0,0]}
+      },
       "cauliflower.png": {
         "tile": 20,
         "tileh": 30,
         "map": { "Cauliflower": [0,0]}
+      },
+      "cauliflower_bubble.png": {
+        "tile": 60,
+        "tileh": 50,
+        "map": { "CauliflowerBubble": [0,0]}
       },
       "hamburger.png": {
         "tile": 44,
@@ -1429,6 +1442,24 @@ function onHitOnChilli(aChilliEntity,aHitDatas){
   aChilliEntity.vy = -60;
   aChilliEntity.ay = -100;
   // will be destroyed when isTooFarOutOfWorld() returns true
+
+  // Attach bubble to kangaroo
+  var chilliBubble = Crafty.e("2D, Canvas, ChilliBubble")
+  .attr({
+    x: kangarooEntity._x + 50,
+    y: kangarooEntity._y - 30,
+    z: Z_KANGAROO,
+  });
+  kangarooEntity.attach(chilliBubble);
+  // Schedule its destruction
+  Crafty.e("Delay").delay(
+    function(){
+      Crafty("ChilliBubble").destroy();
+    },
+    CHILLI_BUBBLE_DURATION,
+    0
+  );
+  
 }
 
 /**
@@ -1440,11 +1471,29 @@ function onHitOnCauliflower(aCauliflowerEntity,aHitDatas){
   // decelerate by 1kph
   // convert one kph into speed in pixels/second
   oneKph = PIXELS_PER_METER*1000 / (60*60);
-  // decelerate only if we are >= 2kph
-  if (Math.abs(speed) >= 2*oneKph){
+  // decelerate only if we are >= min speed
+  if (Math.abs(speed) >= SPEED_MIN){
     newSpeed = Math.sign(speed)*(Math.abs(speed) - oneKph);
     multiplicationFactor = newSpeed / speed;
     changeSpeed(multiplicationFactor);
+
+    // Attach bubble to kangaroo
+    var cauliflowerBubble = Crafty.e("2D, Canvas, CauliflowerBubble")
+    .attr({
+      x: kangarooEntity._x + 50,
+      y: kangarooEntity._y - 30,
+      z: Z_KANGAROO,
+    });
+    kangarooEntity.attach(cauliflowerBubble);
+    // Schedule its destruction
+    Crafty.e("Delay").delay(
+      function(){
+        Crafty("CauliflowerBubble").destroy();
+      },
+      CAULIFLOWER_BUBBLE_DURATION,
+      0
+    );
+
   }
   // and make the cauliflower disappear (fly away)
   aCauliflowerEntity.vy = -60;
