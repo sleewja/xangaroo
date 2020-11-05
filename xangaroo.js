@@ -10,7 +10,7 @@ var FLOOR_HEIGHT = 50;
 var Y_FLOOR = WORLD_HEIGHT - FLOOR_HEIGHT;
 var BUSH_HEIGHT = 120;
 var Y_HORIZON = Y_FLOOR - BUSH_HEIGHT;
-var Y_STRATOSPHERE = 10;
+var Y_STRATOSPHERE = -20;
 var FOOTER_HEIGHT = 100;
 var LEFT_MARGIN = 50;
 var CANVAS_WIDTH = LEFT_MARGIN + WORLD_WIDTH;
@@ -271,7 +271,7 @@ var symbols = [
   {
     components: ["Parasol"],
     color: COLOR_PARASOL,
-    distanceFirst: 0, // first distance to appear in the world
+    distanceFirst: 9000, // first distance to appear in the world
     distanceIntervalMin: 100, // min pixel distance between two
     distanceIntervalMax: 1000, // max pixel distance between two
     yMin: 80,
@@ -288,7 +288,7 @@ var symbols = [
   {
     components: ["Football"],
     color: COLOR_FOOTBALL,
-    distanceFirst: 0, // first distance to appear in the world
+    distanceFirst: 6000, // first distance to appear in the world
     distanceIntervalMin: 100, // min pixel distance between two
     distanceIntervalMax: 1000, // max pixel distance between two
     yMin: 70,
@@ -307,7 +307,7 @@ var symbols = [
   {
     components: ["Goal"],
     color: COLOR_GOAL,
-    distanceFirst: 0, // first distance to appear in the world
+    distanceFirst: 6200, // first distance to appear in the world
     distanceIntervalMin: 300, // min pixel distance between two
     distanceIntervalMax: 1000, // max pixel distance between two
     yMin: 50,
@@ -317,7 +317,7 @@ var symbols = [
   },
   {
     components: ["Chilli"],
-    distanceFirst: 100, // first distance to appear in the world
+    distanceFirst: 900, // first distance to appear in the world
     distanceIntervalMin: 100, // min pixel distance between two
     distanceIntervalMax: 1000, // max pixel distance between two
     yMin: 80,
@@ -352,7 +352,7 @@ var symbols = [
   },
   {
     components: ["Cauliflower"],
-    distanceFirst: 800, // first distance to appear in the world
+    distanceFirst: 1200, // first distance to appear in the world
     distanceIntervalMin: 100, // min pixel distance between two
     distanceIntervalMax: 1000, // max pixel distance between two
     yMin: 80,
@@ -440,9 +440,9 @@ var symbols = [
   },
   {
     components: ["Boot"],
-    distanceFirst: 5,//5000, // first distance to appear in the world
-    distanceIntervalMin: 100,//2000, // min pixel distance between two
-    distanceIntervalMax: 100,//10000, // max pixel distance between two
+    distanceFirst: 5000, // first distance to appear in the world
+    distanceIntervalMin: 2000, // min pixel distance between two
+    distanceIntervalMax: 10000, // max pixel distance between two
     yMin: 80,
     yMax: Y_FLOOR - 80,
     zAtYMin: Z_ATTRIBUTES, // in front of kangaroo
@@ -460,9 +460,9 @@ var symbols = [
     components: ["Message"],
     color: COLOR_MESSAGE,
     
-    distanceFirst: 1000, // 1st distance where the message is aligned
-    distanceIntervalMin: 2000, // if this key is absent: it means the symbol appears only once
-    distanceIntervalMax: 2000, // if this key is absent: it means the symbol appears only once
+    distanceFirst: 25000, // 1st distance where the message is aligned
+    distanceIntervalMin: 3000, // if this key is absent: it means the symbol appears only once
+    distanceIntervalMax: 3000, // if this key is absent: it means the symbol appears only once
     xReveal: LEFT_MARGIN + 10, // bounding rectangle of message in the sky at the moment it is aligned
     wReveal: WORLD_WIDTH - 30, // width
     yTop: 10,     
@@ -703,8 +703,9 @@ function drawWorld() {
     .checkHits("Kangaroo")
     .bind("HitOn", function (hitDatas){
       if(DEBUG){console.log("Hit the stratosphere");}
-      // make the kangaroo start falling quicker
+      // stop parasol effect, and make the kangaroo start falling quicker
       hitDatas.forEach(function(hitData){
+        stopParasolEffect(hitData.obj);
         hitData.obj.startFall();
       })
     });
@@ -1109,15 +1110,24 @@ function createSymbol(aSymbol, aDistance){
           }
         })
         .bind("Move", function (e) {
-          // destroy the entity if it has moved too far away on the left or above
+          // destroy the entity if it has moved too far away on the left or above,
+          // and it is not attached to the kangaroo
           if (isTooFarOutOfWorld(this._x, this.vx, this._y)) {
-            if (DEBUG) {
+            isAttachedToKangaroo = false;
+            if ( this._parent){ // check first presence of a parent (returns NULL if absent)
+              if (this._parent.has("Kangaroo")){
+                isAttachedToKangaroo = true;
+              }        
+            }
+            if(!isAttachedToKangaroo) {
+              if (DEBUG&&0) {
                 console.log(
                   "destroy a " + aSymbol.components + " at x = ",
                   this._x
                 );
+              }
+              this.destroy();
             }
-            this.destroy();
           }
         }); // end of chained calls from Crafty.e()
         // if at this stage the width is 0, it means that no sprite
