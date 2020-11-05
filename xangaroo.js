@@ -85,6 +85,8 @@ var GOAL_BUBBLE_DURATION = 2500; // milliseconds
 var GOAL_ENERGY_INCREMENT = 150; // energy increment when scoring a goal
 var CHILLI_BUBBLE_DURATION = 1000; // milliseconds
 var CAULIFLOWER_BUBBLE_DURATION = 1000; // milliseconds
+var HAMBURGER_ENERGY_INCREMENT = 150; // energy increment when hitting ("eating") a hamburger 
+var HAMBURGER_BUBBLE_DURATION = 1000; // milliseconds
 
 var startTime;
 /** speed of the game, in pixels/seconds.
@@ -457,6 +459,22 @@ var symbols = [
     ]
   },
   {
+    components: ["Hamburger"],
+    distanceFirst: 4300, // first distance to appear in the world
+    distanceIntervalMin: 2000, // min pixel distance between two
+    distanceIntervalMax: 10000, // max pixel distance between two
+    yMin: 40,
+    yMax: Y_HORIZON - 25,
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnHamburger(aEntity,hitDatas);
+    },
+    patterns : [
+      [ // single
+        { x: 0, y: 0 },
+      ],
+    ]
+  },
+  {
     components: ["Message"],
     color: COLOR_MESSAGE,
     
@@ -585,6 +603,11 @@ var assetsObj = {
         "tile": 44,
         "tileh": 30,
         "map": { "HamburgerHit": [0,0]}
+      },
+      "hamburger_bubble.png": {
+        "tile": 60,
+        "tileh": 50,
+        "map": { "HamburgerBubble": [0,0]}
       },
       "cowboyhat.png": {
         "tile": 28,
@@ -1612,6 +1635,7 @@ function onHitOnFootball(aFootballEntity,aHitDatas){
  * @param {*} aHitDatas 
  */
 function onHitOnChilli(aChilliEntity,aHitDatas){
+  kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
   // accelerate by 1kph
   // convert one kph into speed in pixels/second
   oneKph = PIXELS_PER_METER*1000 / (60*60);
@@ -1648,6 +1672,7 @@ function onHitOnChilli(aChilliEntity,aHitDatas){
  * @param {*} aHitDatas 
  */
 function onHitOnCauliflower(aCauliflowerEntity,aHitDatas){
+  kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
   // decelerate by 1kph
   // convert one kph into speed in pixels/second
   oneKph = PIXELS_PER_METER*1000 / (60*60);
@@ -1706,6 +1731,39 @@ function onHitOnAttribute(aAttributeEntity,aHitDatas,aComponent,xOffset,yOffset)
 }
 
 
+/**
+ * Action on hitting a hamburger: add energy
+ * @param {*} aHamburgerEntity 
+ * @param {*} aHitDatas 
+ */
+function onHitOnHamburger(aHamburgerEntity,aHitDatas){
+  kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
+
+  // eat the hamburger
+  if (aHamburgerEntity.has("Hamburger")){
+    aHamburgerEntity.toggleComponent("Hamburger", "HamburgerHit");
+
+    // increase energy by a good deal of kCalories
+    kangarooEntity.energy += HAMBURGER_ENERGY_INCREMENT;
+
+    // Attach bubble to kangaroo
+    var hamburgerBubble = Crafty.e("2D, Canvas, HamburgerBubble")
+    .attr({
+      x: kangarooEntity._x + 50,
+      y: kangarooEntity._y - 30,
+      z: Z_KANGAROO,
+    });
+    kangarooEntity.attach(hamburgerBubble);
+    // Schedule its destruction
+    Crafty.e("Delay").delay(
+      function(){
+        Crafty("HamburgerBubble").destroy();
+      },
+      HAMBURGER_BUBBLE_DURATION,
+      0
+    );
+  }
+}
 
 // ***********************************************
 // game logic
