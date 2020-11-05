@@ -71,6 +71,7 @@ var Z_BACKGROUND = -1000; // in the background, objects are fixed, their visual 
 var Z_SYMBOLS_DEFAULT = 0; // at z=0: visual speed = speed
 var Z_TRACES = 1; // in front of symbols
 var Z_KANGAROO = 2; // use Z=2 and not zero, to be in front of symbols. We should not put anything else in this Z plane
+var Z_ATTRIBUTES = 3; // attributes of kan: in front of kangaroo
 var Z_OBSERVER = 100; // at Z_OBSERVER the visual speed is infinite
 var Z_PANEL = 1000; // in front, to hide objects behind
 
@@ -331,14 +332,123 @@ var symbols = [
     ]
   },
   {
+    components: ["Chilli"],
+    distanceFirst: 500, // first distance to appear in the world
+    distanceIntervalMin: 1000, // min pixel distance between two
+    distanceIntervalMax: 5000, // max pixel distance between two
+    yMin: Y_FLOOR-50,
+    yMax: Y_FLOOR-30,
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnChilli(aEntity,hitDatas);
+    },
+    patterns : [
+      [ // wall of chilli's
+        /*{ x: 0, y: 0 }, { x: -5, y: -30 }, 
+        { x: -8, y: -60 }*/, { x: 3, y: -90 },
+        { x: -2, y: -120 },{ x: 5, y: -150 },
+        { x: 7, y: -180 },
+      ],
+    ]
+  },
+  {
     components: ["Cauliflower"],
-    distanceFirst: 100, // first distance to appear in the world
+    distanceFirst: 800, // first distance to appear in the world
     distanceIntervalMin: 100, // min pixel distance between two
     distanceIntervalMax: 1000, // max pixel distance between two
     yMin: 80,
     yMax: Y_FLOOR - 80,
     onHitOn: function (aEntity,hitDatas) {
       onHitOnCauliflower(aEntity,hitDatas);
+    },
+    patterns : [
+      [ // single
+        { x: 0, y: 0 },
+      ],
+    ]
+  },
+  {
+    components: ["CowBoyHat"],
+    distanceFirst: 5000, // first distance to appear in the world
+    distanceIntervalMin: 2000, // min pixel distance between two
+    distanceIntervalMax: 10000, // max pixel distance between two
+    yMin: 80,
+    yMax: Y_FLOOR - 80,
+    zAtYMin: Z_ATTRIBUTES, // in front of kangaroo
+    zAtYMax: Z_ATTRIBUTES, // in front of kangaroo
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnAttribute(aEntity,hitDatas,this.components[0],33,-6);
+    },
+    patterns : [
+      [ // single
+        { x: 0, y: 0 },
+      ],
+    ]
+  },
+  {
+    components: ["Sunglasses"],
+    distanceFirst: 1000, // first distance to appear in the world
+    distanceIntervalMin: 2000, // min pixel distance between two
+    distanceIntervalMax: 10000, // max pixel distance between two
+    yMin: 80,
+    yMax: Y_FLOOR - 80,
+    zAtYMin: Z_ATTRIBUTES, // in front of kangaroo
+    zAtYMax: Z_ATTRIBUTES, // in front of kangaroo
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnAttribute(aEntity,hitDatas,this.components[0],37,4);
+    },
+    patterns : [
+      [ // single
+        { x: 0, y: 0 },
+      ],
+    ]
+  },
+  {
+    components: ["Sweater"],
+    distanceFirst: 15000, // first distance to appear in the world
+    distanceIntervalMin: 2000, // min pixel distance between two
+    distanceIntervalMax: 10000, // max pixel distance between two
+    yMin: 80,
+    yMax: Y_FLOOR - 80,
+    zAtYMin: Z_ATTRIBUTES, // in front of kangaroo
+    zAtYMax: Z_ATTRIBUTES, // in front of kangaroo
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnAttribute(aEntity,hitDatas,this.components[0],18,2);
+    },
+    patterns : [
+      [ // single
+        { x: 0, y: 0 },
+      ],
+    ]
+  },
+  {
+    components: ["Short"],
+    distanceFirst: 10000, // first distance to appear in the world
+    distanceIntervalMin: 2000, // min pixel distance between two
+    distanceIntervalMax: 10000, // max pixel distance between two
+    yMin: 80,
+    yMax: Y_FLOOR - 80,
+    zAtYMin: Z_ATTRIBUTES, // in front of kangaroo
+    zAtYMax: Z_ATTRIBUTES, // in front of kangaroo
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnAttribute(aEntity,hitDatas,this.components[0],17,10);
+    },
+    patterns : [
+      [ // single
+        { x: 0, y: 0 },
+      ],
+    ]
+  },
+  {
+    components: ["Boot"],
+    distanceFirst: 5,//5000, // first distance to appear in the world
+    distanceIntervalMin: 100,//2000, // min pixel distance between two
+    distanceIntervalMax: 100,//10000, // max pixel distance between two
+    yMin: 80,
+    yMax: Y_FLOOR - 80,
+    zAtYMin: Z_ATTRIBUTES, // in front of kangaroo
+    zAtYMax: Z_ATTRIBUTES, // in front of kangaroo
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnAttribute(aEntity,hitDatas,this.components[0],20,28);
     },
     patterns : [
       [ // single
@@ -386,6 +496,11 @@ var assetsObj = {
         "tileh": 17,
         "map": { "Scorpion": [0,0] }
       },
+      "scorpycrunched.png": {
+        "tile": 20,
+        "tileh": 14,
+        "map": { "ScorpionCrunched": [0,0] }
+      },
       "cloud.png": {
           "tile": 50,
           "tileh": 21,
@@ -412,8 +527,8 @@ var assetsObj = {
         "map": { "Uluru": [0,0]}
       },
       "pain.png": {
-        "tile": 19,
-        "tileh": 15,
+        "tile": 30,
+        "tileh": 12,
         "map": { "Pain": [0,0]}
       },
       "parasol.png": {
@@ -470,8 +585,32 @@ var assetsObj = {
         "tile": 44,
         "tileh": 30,
         "map": { "HamburgerHit": [0,0]}
+      },
+      "cowboyhat.png": {
+        "tile": 28,
+        "tileh": 13,
+        "map": { "CowBoyHat": [0,0]}
+      },
+      "sunglasses.png": {
+        "tile": 12,
+        "tileh": 7,
+        "map": { "Sunglasses": [0,0]}
+      },
+      "sweater.png": {
+        "tile": 25,
+        "tileh": 19,
+        "map": { "Sweater": [0,0]}
+      },
+      "short.png": {
+        "tile": 17,
+        "tileh": 15,
+        "map": { "Short": [0,0]}
+      },
+      "boot.png": {
+        "tile": 13,
+        "tileh": 11,
+        "map": { "Boot": [0,0]}
       }
-
   },
 };
 
@@ -581,7 +720,26 @@ function drawWorld() {
   // prepopulate the world (clouds, rocks, messages...)
   prePopulateWorld();
 
-  // write distance and speed
+  // write elapsed time, distance and speed
+  Crafty.e("2D, Canvas, Text")
+  .attr({
+    x: LEFT_MARGIN + 10,
+    y: WORLD_HEIGHT - 60,
+    w: 100,
+    z: Z_PANEL,
+  })
+  .text(function () {
+    timeNow = new Date().getTime();
+    elapsedTime = new Date (timeNow - startTime);
+    moreThanOneHour = elapsedTime >= 60*60*1000;
+    hourDigits = moreThanOneHour? 3:0;
+    return (elapsedTime.toISOString().substr(14-hourDigits, 5+hourDigits)
+    );
+  })
+  .dynamicTextGeneration(true)
+  .textColor("white")
+  .textFont({size: '20px', weight: 'bold'});
+
   Crafty.e("2D, Canvas, Text")
   .attr({
     x: LEFT_MARGIN + 10,
@@ -953,7 +1111,7 @@ function createSymbol(aSymbol, aDistance){
         .bind("Move", function (e) {
           // destroy the entity if it has moved too far away on the left or above
           if (isTooFarOutOfWorld(this._x, this.vx, this._y)) {
-            if (DEBUG&&0) {
+            if (DEBUG) {
                 console.log(
                   "destroy a " + aSymbol.components + " at x = ",
                   this._x
@@ -1216,34 +1374,46 @@ function onHitOnRock(aRockEntity,aHitDatas){
 }
 
 /**
- * Action on hitting a Scorpion: decrease energy
+ * Action on hitting a Scorpion: decrease energy, unless we have boots
  * @param {*} aScorpionEntity 
  * @param {*} aHitDatas 
  */
 function onHitOnScorpion(aScorpionEntity,aHitDatas){
   kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
-  // Attach pain bubble
-  var painSymbol = Crafty.e("2D, Canvas, Pain")
-  .attr({
-    x: kangarooEntity._x + 20,
-    y: kangarooEntity._y + 15,
-    z: Z_KANGAROO,
-  });
-  kangarooEntity.attach(painSymbol);
-  // Schedule its destruction
-  Crafty.e("Delay").delay(
-    function(){
-      Crafty("Pain").destroy();
-    },
-    SCORPION_PAIN_SYMBOL_DURATION,
-    0
-  );
-
-  // decrease energy
-  kangarooEntity.energy = Math.max(
-      ENERGY_MIN,
-      kangarooEntity.energy - SCORPION_ENERGY_DECREMENT);
-
+  if (getAttachedEntities(kangarooEntity, "Boot").length == 0)
+  {
+    // Attach pain bubble
+    var painSymbol = Crafty.e("2D, Canvas, Pain")
+    .attr({
+      x: kangarooEntity._x + 11,
+      y: kangarooEntity._y + 26,
+      z: Z_KANGAROO,
+    });
+    kangarooEntity.attach(painSymbol);
+    // Schedule its destruction
+    Crafty.e("Delay").delay(
+      function(){
+        Crafty("Pain").destroy();
+      },
+      SCORPION_PAIN_SYMBOL_DURATION,
+      0
+    );
+    // decrease energy
+    kangarooEntity.energy = Math.max(
+        ENERGY_MIN,
+        kangarooEntity.energy - SCORPION_ENERGY_DECREMENT);
+  }
+  else {
+    // The kangaroo has boots: crunches the scorpion !
+    if (aScorpionEntity.has("Scorpion")){
+      aScorpionEntity.removeComponent("Scorpion");
+    }
+    if (!aScorpionEntity.has("ScorpionCrunched")){
+      aScorpionEntity.addComponent("ScorpionCrunched");
+    }
+    // and stop its absolute speed
+    aScorpionEntity.vx = calculateVisualSpeed( -speed, aScorpionEntity._z);
+  }
 }
 
 /**
@@ -1500,6 +1670,31 @@ function onHitOnCauliflower(aCauliflowerEntity,aHitDatas){
   aCauliflowerEntity.ay = -100;
   // will be destroyed when isTooFarOutOfWorld() returns true
 }
+
+/**
+ * Action on hitting an attribute: attach to kangaroo
+ * 
+ * @param {*} aAttributeEntity 
+ * @param {*} aHitDatas 
+ * @param {*} aComponent component name
+ * @param {*} xOffset offset for attaching to kangaroo
+ * @param {*} yOffset offset for attaching to kangaroo
+ */
+function onHitOnAttribute(aAttributeEntity,aHitDatas,aComponent,xOffset,yOffset){
+  kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
+  // do action only if this attribute is not yet attached to kangaroo
+  attachedAttributeEntities = getAttachedEntities(kangarooEntity, aComponent);
+  if (attachedAttributeEntities.length == 0){
+    // attach to kangaroo
+    aAttributeEntity.x = kangarooEntity._x + xOffset;
+    aAttributeEntity.y = kangarooEntity._y + yOffset;
+    // stop horizontal motion
+    aAttributeEntity.vx = 0;
+    // attach to the kangaroo
+    kangarooEntity.attach(aAttributeEntity);
+  }
+}
+
 
 
 // ***********************************************
