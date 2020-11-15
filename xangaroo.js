@@ -11,10 +11,9 @@ var Y_FLOOR = WORLD_HEIGHT - FLOOR_HEIGHT;
 var BUSH_HEIGHT = 120;
 var Y_HORIZON = Y_FLOOR - BUSH_HEIGHT;
 var Y_STRATOSPHERE = -20;
-var FOOTER_HEIGHT = 100;
 var LEFT_MARGIN = 50;
 var CANVAS_WIDTH = LEFT_MARGIN + WORLD_WIDTH;
-var CANVAS_HEIGHT = WORLD_HEIGHT + FOOTER_HEIGHT;
+var CANVAS_HEIGHT = WORLD_HEIGHT;
 
 var COLOR_FLOOR = "sandybrown";
 var COLOR_BUSH = "sandybrown"; //"#f7b77a";
@@ -655,7 +654,9 @@ var spritePolygons = {
   ),
 }
 
-Crafty.init(CANVAS_WIDTH, CANVAS_HEIGHT, document.getElementById("xangaroo"));
+var viewportScale = calculateScalingFactor(available_width, available_height);
+Crafty.init(CANVAS_WIDTH * viewportScale, CANVAS_HEIGHT * viewportScale); // uses by default 'cr-stage' div
+
 
 Crafty.load(assetsObj, // preload assets
   function() { //when loaded
@@ -672,6 +673,31 @@ Crafty.load(assetsObj, // preload assets
 // ***********************************************
 // functions
 // ***********************************************
+
+// calculate viewport scaling factor
+function calculateScalingFactor(availableWidth, availableHeight){
+  stageWidth = CANVAS_WIDTH;
+  stageHeight = CANVAS_HEIGHT;
+  stageAspectRatio = stageWidth/stageHeight;
+  availableAspectRatio = availableWidth/availableHeight;
+  if (stageAspectRatio < availableAspectRatio){
+    // fit on height: the stage will occupy the full window's height
+    scaleFactor = availableHeight / stageHeight;
+  } else {
+    // fit on width: the stage will occupy the full window's width
+    scaleFactor = availableWidth / stageWidth;
+  }
+  return scaleFactor;
+}
+
+// resize and scale the viewport upon browser window resize
+function resizeViewport(){
+  viewportScale = calculateScalingFactor(available_width, available_height);
+  Crafty.viewport.width = CANVAS_WIDTH * viewportScale;
+  Crafty.viewport.height = CANVAS_HEIGHT * viewportScale;
+  Crafty.viewport.scale(viewportScale);
+}
+
 
 // draw initial world
 function drawWorld() {
@@ -828,9 +854,9 @@ function drawLeftPanel() {
   // energy reserve
   energyBar = Crafty.e("2D, Canvas, Color")
     .attr({
-      x: 0,
+      x: LEFT_MARGIN/5,
       y: Y_FLOOR, // initially empty
-      w: 30,
+      w: LEFT_MARGIN/5 * 3,
       h: 0, // initially empty
       z: Z_PANEL,
     })
@@ -846,9 +872,9 @@ function drawLeftPanel() {
   // for the first kangaroo entity
   energyUsedBar = Crafty.e("2D, Canvas, Color")
     .attr({
-      x: 5,
+      x: LEFT_MARGIN/5 + 5,
       y: Y_FLOOR, // initially empty
-      w: 20,
+      w: LEFT_MARGIN/5 * 2,
       h: 0, // initially empty
       z: Z_PANEL,
     })
@@ -868,7 +894,7 @@ function drawFooter() {
     Crafty.e("2D, Canvas, Text")
       .attr({
         x: LEFT_MARGIN + 10,
-        y: CANVAS_HEIGHT - FOOTER_HEIGHT+10,
+        y: 10,
         w: 100,
       })
       .text(function () {
@@ -2159,6 +2185,7 @@ Crafty.bind("UpdateFrame", function (eventData) {
 });
 
 Crafty.scene("main", function () {
+  Crafty.viewport.scale(viewportScale);
   startTime = new Date().getTime();
   distance = 0;
   distanceLastPopulate = distance;
