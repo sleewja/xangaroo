@@ -1555,7 +1555,7 @@ function onHitOnCactus(aCactusEntity,aHitDatas){
       }
       // attach bubble to Kangaroo
       attachBubble(kangarooEntity, 50, -40, "CactusBubble", CACTUS_BUBBLE_DURATION);
-      //Crafty.trigger("GameOver",0);
+      Crafty.trigger("GameOver",0);
     }
   } else {
     // it's a hit on the same cactus as previously hit: do nothing
