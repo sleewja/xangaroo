@@ -34,7 +34,7 @@ var SPEED_MIN = 40;
 var SPEED_START = 60; // initial speed, in pixels/second
 var ENERGY_START = 25; // energy = height in pixels of the jump
 var ENERGY_MIN = 10;
-var ENERGY_DEFAULT_JUMP = 15; // default jump if no request from the player
+var ENERGY_DEFAULT_JUMP = 12; // default jump if no request from the player
 var ENERGY_GAIN_ON_LANDING = 15; // energy gain after a default jump while energy < ENERGY_MAX_FOR_GAIN_ON_LANDING
 var ENERGY_MAX_FOR_GAIN_ON_LANDING = 150; // max energy that can be reached by consecutive default jumps
 var ACCEPTANCE_DELAY_BEFORE_LANDING = 500; // milliseconds, delay to accept player jump request before landing
@@ -69,8 +69,9 @@ var X_KANGAROO = CANVAS_WIDTH / 3;
 var Z_BACKGROUND = -1000; // in the background, objects are fixed, their visual speed is 0
 var Z_SYMBOLS_DEFAULT = 0; // at z=0: visual speed = speed
 var Z_TRACES = 1; // in front of symbols
-var Z_KANGAROO = 2; // use Z=2 and not zero, to be in front of symbols. We should not put anything else in this Z plane
-var Z_ATTRIBUTES = 3; // attributes of kan: in front of kangaroo
+var Z_KANGAROO = 3; // use Z=2 and not zero, to be in front of symbols. We should not put anything else in this Z plane
+var Z_ATTRIBUTES = 4; // attributes of kang, when in the air or worn by Kang: in front of kangaroo
+var Z_ATTRIBUTES_LOST = 2; // attributes when lost on a cactus: behinf Kang
 var Z_OBSERVER = 100; // at Z_OBSERVER the visual speed is infinite
 var Z_PANEL = 1000; // in front, to hide objects behind
 
@@ -86,6 +87,8 @@ var CHILLI_BUBBLE_DURATION = 1000; // milliseconds
 var CAULIFLOWER_BUBBLE_DURATION = 1000; // milliseconds
 var HAMBURGER_ENERGY_INCREMENT = 150; // energy increment when hitting ("eating") a hamburger 
 var HAMBURGER_BUBBLE_DURATION = 1000; // milliseconds
+var MAX_CACTUS_WIDTH = 50; // pixels
+var CACTUS_BUBBLE_DURATION = 1000; // milliseconds
 
 var startTime;
 /** speed of the game, in pixels/seconds.
@@ -95,6 +98,7 @@ var startTime;
 var speed;
 var distance; // distance travelled in pixels
 var distanceLastPopulate; // distance last time populateWorld was called
+var distanceLastCactusHit; // distance of last cactus hit
 var traces = []; // array of arrays of entities: trace of kangaroo(s)
 
 // ***********************************************
@@ -533,9 +537,14 @@ var assetsObj = {
         "tileh": 10,
         "map": { "CactusHit": [0,0]}
       },
+      "cactus_bubble.png": {
+        "tile": 60,
+        "tileh": 50,
+        "map": { "CactusBubble": [0,0]}
+      },
       "rock.png": {
         "tile": 20,
-        "tileh": 19,
+        "tileh": 20,
         "map": { "Rock": [0,0]}
       },
       "uluru.png": {
@@ -638,10 +647,11 @@ var assetsObj = {
 
 var spritePolygons = {
   Kangaroo: new Crafty.polygon(
-    6,13, 16,13, 22,3, 35,3, 36,0, 47,0, 50,12, 40,24, 30,24, 32,38, 23,38
-    ),
+    6,13, 22,4, 36,0, 45,0, 49,12, 31,38, 24,37
+    ), // Caution: The hit area must be a convex shape and not concave
+       // for collision detection to work properly.
   Cactus: new Crafty.polygon( // shrink a bit the polygon to be kind ;-)
-    2,2, 7,2,  7,7, 2,7
+    4,4, 5,4,  5,5, 4,5
   ),
   Cloud: new Crafty.polygon(
     15,7, 37,7, 37,21, 15,21
@@ -723,7 +733,7 @@ function drawWorld() {
       x: LEFT_MARGIN,
       y: Y_HORIZON,
       w: CANVAS_WIDTH,
-      h: BUSH_HEIGHT,
+      h: BUSH_HEIGHT+2, // little overlap with floor to avoid white line wometimes after resizing
       z: Z_BACKGROUND,
     })
     .color(COLOR_BUSH);
@@ -890,7 +900,7 @@ function drawLeftPanel() {
 // draw footer (debug info, logo...)
 function drawFooter() {
   // demo text
-  if (DEBUG) {
+  if (DEBUG&&0) {
     Crafty.e("2D, Canvas, Text")
       .attr({
         x: LEFT_MARGIN + 10,
@@ -1345,6 +1355,14 @@ function createMessage(aSymbol, aDistance){
 // prepopulate the world (clouds and rocks typically) before starting the game
 // simulates a certain play duration in the past
 function prePopulateWorld() {
+  // Remove any "distanceNext" fields that may remain from a previous run
+  // (typically after restarting after a game over)
+  symbols.forEach(function (symbol) {
+    if ("distanceNext" in symbol){
+      delete symbol.distanceNext;
+    }
+  });
+
   // Pre-populate the symbols
   distancePrev = distance;
   // initialise the distance in the past
@@ -1383,6 +1401,35 @@ function getAttachedEntities(entity, componentName){
   });
   return (attachedEntitiesWithGivenComponent);
 }
+
+/**
+ * Attach a bubble(aComponent) to an entity, for a certain duration
+ * 
+ * @param {*} aEntity 
+ * @param {*} aOffsetX 
+ * @param {*} aOffsetY 
+ * @param {*} aComponent 
+ * @param {*} aDuration 
+ */
+function attachBubble(aEntity, aOffsetX, aOffsetY, aComponent, aDuration){
+    // Attach bubble
+    var symbol = Crafty.e("2D, Canvas, " + aComponent)
+    .attr({
+      x: aEntity._x + aOffsetX,
+      y: aEntity._y + aOffsetY,
+      z: aEntity._z,
+    });
+    aEntity.attach(symbol);
+    // Schedule its destruction
+    Crafty.e("Delay").delay(
+      function(){
+        Crafty(aComponent).destroy();
+      },
+      aDuration,
+      0
+    );
+}
+
 
 /**
  * action on hitting a cloud: fly
@@ -1427,7 +1474,7 @@ function onHitOnRock(aRockEntity,aHitDatas){
         kangarooEntity.onLandedOnGround();
    } else {
      // restart hit detection
-     if (DEBUG&&0){console.log("Hit a rock but not by the feet, or during player control.")}
+     if (DEBUG){console.log("Hit a rock but not by the feet, or during player control.")}
      aRockEntity.resetHitChecks("Kangaroo");
    }
 }
@@ -1439,24 +1486,11 @@ function onHitOnRock(aRockEntity,aHitDatas){
  */
 function onHitOnScorpion(aScorpionEntity,aHitDatas){
   kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
+  // At first check if Kang has boots
   if (getAttachedEntities(kangarooEntity, "Boot").length == 0)
   {
     // Attach pain bubble
-    var painSymbol = Crafty.e("2D, Canvas, Pain")
-    .attr({
-      x: kangarooEntity._x + 11,
-      y: kangarooEntity._y + 26,
-      z: Z_KANGAROO,
-    });
-    kangarooEntity.attach(painSymbol);
-    // Schedule its destruction
-    Crafty.e("Delay").delay(
-      function(){
-        Crafty("Pain").destroy();
-      },
-      SCORPION_PAIN_SYMBOL_DURATION,
-      0
-    );
+    attachBubble(kangarooEntity, 11, 26, "Pain", SCORPION_PAIN_SYMBOL_DURATION);
     // decrease energy
     kangarooEntity.energy = Math.max(
         ENERGY_MIN,
@@ -1482,9 +1516,49 @@ function onHitOnScorpion(aScorpionEntity,aHitDatas){
  */
 function onHitOnCactus(aCactusEntity,aHitDatas){
   kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
-  // Put blood on cactus...
-  if (aCactusEntity.has("Cactus")){
-    aCactusEntity.toggleComponent("Cactus","CactusHit");
+
+  // check first if this hit is on a new cactus (not previously hit)
+  let distanceCactusHit = distance + (aCactusEntity._x - kangarooEntity._x);
+  if (Math.abs(distanceCactusHit - distanceLastCactusHit) > MAX_CACTUS_WIDTH ){
+    distanceLastCactusHit = distanceCactusHit;
+
+    // If Kang has a protection: remove it and stick it to the cactus.
+    // Protections are removed in this order:
+    // - CowBoyHat
+    // - Sunglasses
+    // - Sweater
+    // - Short
+    // - Boot
+    protectionComponents=["CowBoyHat", "Sunglasses", "Sweater", "Short", "Boot"];
+    for (let i=0; i<protectionComponents.length; i++){
+      attachedProtectionEntities = getAttachedEntities(kangarooEntity, protectionComponents[i]);
+      if (attachedProtectionEntities.length > 0){
+        break;
+      }
+    }
+    // check if one protection is attached
+    if (attachedProtectionEntities.length > 0){
+      // Detach the protection from Kang, and stick it to the cactus
+      // will be destroyed when isTooFarOutOfWorld() returns true 
+      kangarooEntity.detach(attachedProtectionEntities[0]);
+      attachedProtectionEntities[0].vx = -speed;
+      attachedProtectionEntities[0].x = aCactusEntity._x;
+      attachedProtectionEntities[0].y = aCactusEntity._y;
+      attachedProtectionEntities[0].z = Z_ATTRIBUTES_LOST;
+      // stop detecting collisions to prevent Kang from hitting it again
+      attachedProtectionEntities[0].ignoreHits("Kangaroo");
+    } else {
+      // No protection: ough!! Game over !!
+      // Put blood on cactus...
+      if (aCactusEntity.has("Cactus")){
+        aCactusEntity.toggleComponent("Cactus","CactusHit");
+      }
+      // attach bubble to Kangaroo
+      attachBubble(kangarooEntity, 50, -40, "CactusBubble", CACTUS_BUBBLE_DURATION);
+      //Crafty.trigger("GameOver",0);
+    }
+  } else {
+    // it's a hit on the same cactus as previously hit: do nothing
   }
 }
 
@@ -1616,39 +1690,11 @@ function onHitOnFootball(aFootballEntity,aHitDatas){
     aFootballEntity.vx = -speed;
     
     // Attach goal bubble to kangaroo
-    var goalBubble = Crafty.e("2D, Canvas, GoalBubble")
-    .attr({
-      x: kangarooEntity._x + 50,
-      y: kangarooEntity._y - 30,
-      z: Z_KANGAROO,
-    });
-    kangarooEntity.attach(goalBubble);
-    // Schedule its destruction
-    Crafty.e("Delay").delay(
-      function(){
-        Crafty("GoalBubble").destroy();
-      },
-      GOAL_BUBBLE_DURATION,
-      0
-    );
+    attachBubble(kangarooEntity, 50, -40, "GoalBubble", GOAL_BUBBLE_DURATION);
 
     // Attach goal text to the goal
-    var goalText = Crafty.e("2D, Canvas, GoalText")
-    .attr({
-      x: goalEntity._x -10,
-      y: goalEntity._y - 30,
-      z: goalEntity._z,
-    });
-    goalEntity.attach(goalText);
-    // Schedule its destruction
-    Crafty.e("Delay").delay(
-      function(){
-        Crafty("GoalText").destroy();
-      },
-      GOAL_BUBBLE_DURATION,
-      0
-    );
-
+    attachBubble(goalEntity, -10, -30, "GoalText", GOAL_BUBBLE_DURATION);
+ 
     // and increase energy
     kangarooEntity.energy += GOAL_ENERGY_INCREMENT
   }
@@ -1674,22 +1720,7 @@ function onHitOnChilli(aChilliEntity,aHitDatas){
   // will be destroyed when isTooFarOutOfWorld() returns true
 
   // Attach bubble to kangaroo
-  var chilliBubble = Crafty.e("2D, Canvas, ChilliBubble")
-  .attr({
-    x: kangarooEntity._x + 50,
-    y: kangarooEntity._y - 30,
-    z: Z_KANGAROO,
-  });
-  kangarooEntity.attach(chilliBubble);
-  // Schedule its destruction
-  Crafty.e("Delay").delay(
-    function(){
-      Crafty("ChilliBubble").destroy();
-    },
-    CHILLI_BUBBLE_DURATION,
-    0
-  );
-  
+  attachBubble(kangarooEntity, 50, -40, "ChilliBubble", CHILLI_BUBBLE_DURATION);
 }
 
 /**
@@ -1709,22 +1740,7 @@ function onHitOnCauliflower(aCauliflowerEntity,aHitDatas){
     changeSpeed(multiplicationFactor);
 
     // Attach bubble to kangaroo
-    var cauliflowerBubble = Crafty.e("2D, Canvas, CauliflowerBubble")
-    .attr({
-      x: kangarooEntity._x + 50,
-      y: kangarooEntity._y - 30,
-      z: Z_KANGAROO,
-    });
-    kangarooEntity.attach(cauliflowerBubble);
-    // Schedule its destruction
-    Crafty.e("Delay").delay(
-      function(){
-        Crafty("CauliflowerBubble").destroy();
-      },
-      CAULIFLOWER_BUBBLE_DURATION,
-      0
-    );
-
+    attachBubble(kangarooEntity, 50, -40, "CauliflowerBubble", CAULIFLOWER_BUBBLE_DURATION);
   }
   // and make the cauliflower disappear (fly away)
   aCauliflowerEntity.vy = -60;
@@ -1773,21 +1789,7 @@ function onHitOnHamburger(aHamburgerEntity,aHitDatas){
     kangarooEntity.energy += HAMBURGER_ENERGY_INCREMENT;
 
     // Attach bubble to kangaroo
-    var hamburgerBubble = Crafty.e("2D, Canvas, HamburgerBubble")
-    .attr({
-      x: kangarooEntity._x + 50,
-      y: kangarooEntity._y - 30,
-      z: Z_KANGAROO,
-    });
-    kangarooEntity.attach(hamburgerBubble);
-    // Schedule its destruction
-    Crafty.e("Delay").delay(
-      function(){
-        Crafty("HamburgerBubble").destroy();
-      },
-      HAMBURGER_BUBBLE_DURATION,
-      0
-    );
+    attachBubble(kangarooEntity, 50, -40, "HamburgerBubble", HAMBURGER_BUBBLE_DURATION);
   }
 }
 
@@ -2184,11 +2186,33 @@ Crafty.bind("UpdateFrame", function (eventData) {
   }
 });
 
+Crafty.bind("GameOver", function (eventData){
+  Crafty.pause();
+
+  // Show message, and restart on click on it
+  Crafty.e("2D, Canvas, Text, Mouse")
+    .attr({
+      x: CANVAS_WIDTH/4,
+      y: CANVAS_HEIGHT/3,
+      w: CANVAS_WIDTH/3,
+      h: CANVAS_HEIGHT/3,
+    })
+    .text("GAME OVER")
+    .textColor("red")
+    .textFont({size: '60px', weight: 'bold'})
+    .bind("MouseDown", function (MouseEvent) {
+      // restart the game, and unpause
+      Crafty.pause();
+      Crafty.scene("main");
+    })
+});
+
 Crafty.scene("main", function () {
   Crafty.viewport.scale(viewportScale);
   startTime = new Date().getTime();
   distance = 0;
   distanceLastPopulate = distance;
+  distanceLastCactusHit = distance;
   speed = SPEED_START;
   drawWorld();
   drawLeftPanel();
