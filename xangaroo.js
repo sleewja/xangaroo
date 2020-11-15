@@ -2308,7 +2308,7 @@ Crafty.c("KangarooPlayer", {
 
 Crafty.bind("KeyDown", function (e) {
   // test game actions
-  if (DEBUG) {
+  if (DEBUG&&0) {
     if ((e.key == Crafty.keys.ADD) ||
         (e.key == Crafty.keys.RIGHT_ARROW)){
       // '+' in numeric keypad
