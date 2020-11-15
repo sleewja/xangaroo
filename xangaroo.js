@@ -235,9 +235,31 @@ var symbols = [
     },
   },
   {
-    components: ["Cactus"],
+    components: ["Cactus"], // little cactuses at the beginning
     color: COLOR_CACTUS,
     distanceFirst: 0, // first distance to appear in the world
+    distanceMax: 8000,
+    distanceIntervalMin: 300, // min pixel distance between two
+    distanceIntervalMax: 600, // max pixel distance between two
+    yMin: Y_FLOOR - 10,
+    yMax: Y_FLOOR - 10,
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnCactus(aEntity,hitDatas);
+    },
+    patterns: [
+      [
+        // very small cactus
+        { x: 0, y: 0 },
+        { x: 0, y: -10 }, // trunk
+        { x: 10, y: -10 },
+        { x: 10, y: -20 }, // right arm
+      ],
+    ],
+  },
+  {
+    components: ["Cactus"],
+    color: COLOR_CACTUS,
+    distanceFirst: 8100, // first distance to appear in the world
     distanceIntervalMin: 150, // min pixel distance between two
     distanceIntervalMax: 600, // max pixel distance between two
     yMin: Y_FLOOR - 10,
@@ -246,6 +268,13 @@ var symbols = [
       onHitOnCactus(aEntity,hitDatas);
     },
     patterns: [
+      [
+        // very small cactus
+        { x: 0, y: 0 },
+        { x: 0, y: -10 }, // trunk
+        { x: 10, y: -10 },
+        { x: 10, y: -20 }, // right arm
+      ],
       [
         // small cactus
         { x: 0, y: 0 },
@@ -270,6 +299,42 @@ var symbols = [
         { x: 10, y: -30 },
         { x: 20, y: -30 },
         { x: 20, y: -40 }, // right arm
+      ],
+    ],
+  },
+  {
+    components: ["Cactus"],
+    color: COLOR_CACTUS,
+    distanceFirst: 35000, // first distance to appear in the world
+    distanceIntervalMin: 2000, // min pixel distance between two
+    distanceIntervalMax: 10000, // max pixel distance between two
+    yMin: Y_FLOOR - 10,
+    yMax: Y_FLOOR - 10,
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnCactus(aEntity,hitDatas);
+    },
+    patterns: [
+      [
+        // giant cactus
+        { x: 0, y: 0 },
+        { x: 0, y: -10 },
+        { x: 0, y: -20 },
+        { x: 0, y: -30 },
+        { x: 0, y: -40 },
+        { x: 0, y: -50 },
+        { x: 0, y: -60 },
+        { x: 0, y: -70 }, // trunk
+        { x: 10, y: -10 },
+        { x: 20, y: -10 },
+        { x: 20, y: -20 }, // right arm 1
+        { x: 10, y: -40 },
+        { x: 20, y: -40 },
+        { x: 20, y: -50 }, // right arm 2
+        { x: -10, y: -20 },
+        { x: -20, y: -20 },
+        { x: -20, y: -30 }, // left arm 1
+        { x: -10, y: -70 },
+        { x: -10, y: -80 }, // left arm 2
       ],
     ],
   },
