@@ -34,8 +34,8 @@ var SPEED_MIN = 40;
 var SPEED_START = 60; // initial speed, in pixels/second
 var ENERGY_START = 25; // energy = height in pixels of the jump
 var ENERGY_MIN = 10;
-var ENERGY_DEFAULT_JUMP = 25; // default jump if no request from the player
-var ENERGY_GAIN_ON_LANDING = 20; // energy gain after a default jump while energy < ENERGY_MAX_FOR_GAIN_ON_LANDING
+var ENERGY_DEFAULT_JUMP = 15; // default jump if no request from the player
+var ENERGY_GAIN_ON_LANDING = 15; // energy gain after a default jump while energy < ENERGY_MAX_FOR_GAIN_ON_LANDING
 var ENERGY_MAX_FOR_GAIN_ON_LANDING = 150; // max energy that can be reached by consecutive default jumps
 var ACCEPTANCE_DELAY_BEFORE_LANDING = 500; // milliseconds, delay to accept player jump request before landing
 var ACCEPTANCE_DELAY_AFTER_LANDING = 0; // milliseconds, delay between landing and rebounce where we stay on the ground, to allow player to fire the jump
