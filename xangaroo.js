@@ -58,6 +58,8 @@ var Y_DISAPPEAR_TOP = -100; // y position too far above: symbol is destroyed
 var Y_DISAPPEAR_BOTTOM = WORLD_HEIGHT + 100; // y too far below: symbol must be destroyed
 var MESSAGE_Z_RANDOMNESS_PERCENT = 10; // +/- randomness on z for messages, to prevent from horizontal lines to be too obviously visible
 var PIXELS_PER_METER = 10; // scale to convert pixels into metres
+var DISTANCE_FINISH_LINE = 50000; // pixels
+var DISTANCE_LAST_OBSTACLES = DISTANCE_FINISH_LINE - 400;
 
 // horizontal position of the kangaroo
 var X_KANGAROO = CANVAS_WIDTH / 3;
@@ -130,6 +132,7 @@ var symbols = [
     // rocks in the background
     components: ["Rock"],
     color: COLOR_ROCK,
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 0, // min pixel distance between two
     distanceIntervalMax: 200, // max pixel distance between two
     yMin: 200,
@@ -142,6 +145,7 @@ var symbols = [
     components: ["Rock"],
     color: COLOR_ROCK,
     distanceFirst: 500,
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 20, // min pixel distance between two
     distanceIntervalMax: 400, // max pixel distance between two
     yMin: Y_FLOOR - 19,
@@ -169,6 +173,7 @@ var symbols = [
     components: ["Rock"],
     color: COLOR_ROCK,
     distanceFirst: 2000,
+    distanceMax: DISTANCE_LAST_OBSTACLES - 200,
     distanceIntervalMin: 500, // min pixel distance between two
     distanceIntervalMax: 3000, // max pixel distance between two
     yMin: Y_FLOOR - 19,
@@ -189,6 +194,7 @@ var symbols = [
     // rocks in front of Kangaroo
     components: ["Rock"],
     color: COLOR_ROCK,
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 20, // min pixel distance between two
     distanceIntervalMax: 300, // max pixel distance between two
     yMin: Y_FLOOR - 10,
@@ -224,6 +230,7 @@ var symbols = [
     components: ["Scorpion"],
     color: COLOR_SCORPION,
     distanceFirst: 1000, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 100, // min pixel distance between two
     distanceIntervalMax: 1000, // max pixel distance between two
     yMin: Y_FLOOR - 10,
@@ -260,6 +267,7 @@ var symbols = [
     components: ["Cactus"],
     color: COLOR_CACTUS,
     distanceFirst: 8100, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 150, // min pixel distance between two
     distanceIntervalMax: 600, // max pixel distance between two
     yMin: Y_FLOOR - 10,
@@ -306,6 +314,7 @@ var symbols = [
     components: ["Cactus"],
     color: COLOR_CACTUS,
     distanceFirst: 35000, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 2000, // min pixel distance between two
     distanceIntervalMax: 10000, // max pixel distance between two
     yMin: Y_FLOOR - 10,
@@ -342,6 +351,7 @@ var symbols = [
     components: ["Parasol"],
     color: COLOR_PARASOL,
     distanceFirst: 9000, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 100, // min pixel distance between two
     distanceIntervalMax: 1000, // max pixel distance between two
     yMin: 80,
@@ -359,6 +369,7 @@ var symbols = [
     components: ["Football"],
     color: COLOR_FOOTBALL,
     distanceFirst: 6000, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 100, // min pixel distance between two
     distanceIntervalMax: 1000, // max pixel distance between two
     yMin: 70,
@@ -378,6 +389,7 @@ var symbols = [
     components: ["Goal"],
     color: COLOR_GOAL,
     distanceFirst: 6200, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 300, // min pixel distance between two
     distanceIntervalMax: 1000, // max pixel distance between two
     yMin: 50,
@@ -388,6 +400,7 @@ var symbols = [
   {
     components: ["Chilli"],
     distanceFirst: 900, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 100, // min pixel distance between two
     distanceIntervalMax: 1000, // max pixel distance between two
     yMin: 80,
@@ -404,6 +417,7 @@ var symbols = [
   {
     components: ["Chilli"],
     distanceFirst: 500, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 1000, // min pixel distance between two
     distanceIntervalMax: 5000, // max pixel distance between two
     yMin: Y_FLOOR-50,
@@ -413,8 +427,7 @@ var symbols = [
     },
     patterns : [
       [ // wall of chilli's
-        /*{ x: 0, y: 0 }, { x: -5, y: -30 }, 
-        { x: -8, y: -60 }*/, { x: 3, y: -90 },
+        { x: 3, y: -90 },
         { x: -2, y: -120 },{ x: 5, y: -150 },
         { x: 7, y: -180 },
       ],
@@ -423,6 +436,7 @@ var symbols = [
   {
     components: ["Cauliflower"],
     distanceFirst: 1200, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 100, // min pixel distance between two
     distanceIntervalMax: 1000, // max pixel distance between two
     yMin: 80,
@@ -439,6 +453,7 @@ var symbols = [
   {
     components: ["CowBoyHat"],
     distanceFirst: 5000, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 2000, // min pixel distance between two
     distanceIntervalMax: 10000, // max pixel distance between two
     yMin: 80,
@@ -457,6 +472,7 @@ var symbols = [
   {
     components: ["Sunglasses"],
     distanceFirst: 1000, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 2000, // min pixel distance between two
     distanceIntervalMax: 10000, // max pixel distance between two
     yMin: 80,
@@ -475,6 +491,7 @@ var symbols = [
   {
     components: ["Sweater"],
     distanceFirst: 15000, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 2000, // min pixel distance between two
     distanceIntervalMax: 10000, // max pixel distance between two
     yMin: 80,
@@ -493,6 +510,7 @@ var symbols = [
   {
     components: ["Short"],
     distanceFirst: 10000, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 2000, // min pixel distance between two
     distanceIntervalMax: 10000, // max pixel distance between two
     yMin: 80,
@@ -511,6 +529,7 @@ var symbols = [
   {
     components: ["Boot"],
     distanceFirst: 5000, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 2000, // min pixel distance between two
     distanceIntervalMax: 10000, // max pixel distance between two
     yMin: 80,
@@ -529,6 +548,7 @@ var symbols = [
   {
     components: ["Hamburger"],
     distanceFirst: 4300, // first distance to appear in the world
+    distanceMax: DISTANCE_LAST_OBSTACLES,
     distanceIntervalMin: 2000, // min pixel distance between two
     distanceIntervalMax: 10000, // max pixel distance between two
     yMin: 40,
@@ -543,9 +563,19 @@ var symbols = [
     ]
   },
   {
+    components: ["Friends"],
+    distanceFirst: DISTANCE_FINISH_LINE, // first distance to appear in the world
+    // distanceIntervalMin: 2000, omitted: means no repetition
+    // distanceIntervalMax: 10000, omitted: means no repetition
+    yMin: Y_FLOOR - 110,
+    yMax: Y_FLOOR - 110,
+    onHitOn: function (aEntity,hitDatas) {
+      onHitOnFriends(aEntity,hitDatas);
+    },
+  },
+  {
     components: ["Message"],
     color: COLOR_MESSAGE,
-    
     distanceFirst: 25000, // 1st distance where the message is aligned
     distanceIntervalMin: 3000, // if this key is absent: it means the symbol appears only once
     distanceIntervalMax: 3000, // if this key is absent: it means the symbol appears only once
@@ -562,6 +592,29 @@ var symbols = [
       " #####   ##  ##  ## ###          ######  ## ###  ## ###    ##    ##  ##  ####    #####    ####   ######    ##    #####   ####   ",
       " ##  ##  ##  ##  ##  ##          ##  ##  ##  ##  ##  ##    ##     ####   ##      ##  ##      ##  ##  ##    ##    ##  ##  ##     ",
       " #####    ####   ##  ##          ##  ##  ##  ##  ##  ##  ######    ##    ######  ##  ##   ####   ##  ##  ######  ##  ##  ###### ",
+    ],
+  },
+  {
+    components: ["Message"],
+    color: "chocolate",
+    distanceFirst: DISTANCE_FINISH_LINE+(CANVAS_WIDTH-X_KANGAROO)-50+9, // 1st distance where the message is aligned
+    // "-50" = kangaroo width
+    // "+9" is to account for collision polygons (?): fine-tuning
+    //distanceIntervalMin: 3000, // if this key is absent: it means the symbol appears only once
+    //distanceIntervalMax: 3000, // if this key is absent: it means the symbol appears only once
+    xReveal: LEFT_MARGIN + 100, // bounding rectangle of message in the sky at the moment it is aligned
+    wReveal: WORLD_WIDTH - 240, // width
+    yTop: 10,     
+    yBottom: 50,
+    zTop: -200,
+    zBottom: -500,
+    message: [
+      // ASCII art: http://patorjk.com/software/taag/#p=display&v=1&f=Bright&t=BRAVO
+      " #####   #####    ####   ##  ##   ####  ",
+      " ##  ##  ##  ##  ##  ##  ##  ##  ##  ## ",
+      " #####   #####   ######  ##  ##  ##  ## ",
+      " ##  ##  ##  ##  ##  ##   ####   ##  ## ",
+      " #####   ##  ##  ##  ##    ##     ####  ",
     ],
   },
 ];
@@ -706,6 +759,11 @@ var assetsObj = {
         "tile": 13,
         "tileh": 11,
         "map": { "Boot": [0,0]}
+      },
+      "friends.png": {
+        "tile": 128,
+        "tileh": 110,
+        "map": { "Friends": [0,0]}
       }
   },
 };
@@ -726,6 +784,9 @@ var spritePolygons = {
   ),
   Goal: new Crafty.polygon(
     10,10, 40,10, 40,20, 10,20
+  ),
+  Friends: new Crafty.polygon(
+    0,0,  128,-500, 128,110, 0,110
   ),
 }
 
@@ -1858,6 +1919,53 @@ function onHitOnHamburger(aHamburgerEntity,aHitDatas){
   }
 }
 
+/**
+ * Action on hitting friends: finish!!
+ * @param {*} aFriendsEntity 
+ * @param {*} aHitDatas 
+ */
+function onHitOnFriends(aFriendsEntity,aHitDatas){
+  kangarooEntity = aHitDatas[0].obj; // take only the first hit data: this should be the kangaroo
+
+  // Finish the game: it's a Win !!
+  Crafty.trigger("GameWon",0);
+}
+
+/**
+ * show message at the end: either game over or game won,
+ * stop the game, and restart on click
+ * 
+ * @param {*} aText 
+ * @param {*} aColor 
+ */
+function stopTheGame(aText,aColor){
+  Crafty.pause();
+  // Show message, and restart on click on it or press space bar
+  Crafty.e("2D, Canvas, Text, Mouse, Keyboard")
+    .attr({
+      x: CANVAS_WIDTH/4,
+      y: CANVAS_HEIGHT/4,
+      w: CANVAS_WIDTH/3,
+      h: CANVAS_HEIGHT/3,
+    })
+    .text(aText)
+    .textColor(aColor)
+    .textFont({size: '60px', weight: 'bold'}) 
+    .bind("MouseDown", function (MouseEvent) {
+      // restart the game, and unpause
+      Crafty.pause();
+      Crafty.scene("main");
+    })
+    .bind("KeyDown", function (e){
+      if (e.key == Crafty.keys.SPACE){
+        // restart the game, and unpause
+        Crafty.pause();
+        Crafty.scene("main");
+      }
+    });
+}
+
+
 // ***********************************************
 // game logic
 // ***********************************************
@@ -2252,25 +2360,13 @@ Crafty.bind("UpdateFrame", function (eventData) {
 });
 
 Crafty.bind("GameOver", function (eventData){
-  Crafty.pause();
-
-  // Show message, and restart on click on it
-  Crafty.e("2D, Canvas, Text, Mouse")
-    .attr({
-      x: CANVAS_WIDTH/4,
-      y: CANVAS_HEIGHT/3,
-      w: CANVAS_WIDTH/3,
-      h: CANVAS_HEIGHT/3,
-    })
-    .text("GAME OVER")
-    .textColor("red")
-    .textFont({size: '60px', weight: 'bold'})
-    .bind("MouseDown", function (MouseEvent) {
-      // restart the game, and unpause
-      Crafty.pause();
-      Crafty.scene("main");
-    })
+  stopTheGame("GAME OVER", "red");
 });
+
+Crafty.bind("GameWon", function (eventData){
+  stopTheGame("TROP FORT", "chocolate");
+});
+
 
 Crafty.scene("main", function () {
   Crafty.viewport.scale(viewportScale);
