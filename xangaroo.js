@@ -2,7 +2,7 @@
 // global variables
 // ***********************************************
 
-var DEBUG = true; // display debug info
+var DEBUG = false; // display debug info
 
 var WORLD_WIDTH = 600;
 var WORLD_HEIGHT = Math.round((WORLD_WIDTH / 16) * 9);
@@ -2308,7 +2308,7 @@ Crafty.c("KangarooPlayer", {
 
 Crafty.bind("KeyDown", function (e) {
   // test game actions
-  if (DEBUG&&0) {
+  if (DEBUG) {
     if ((e.key == Crafty.keys.ADD) ||
         (e.key == Crafty.keys.RIGHT_ARROW)){
       // '+' in numeric keypad
