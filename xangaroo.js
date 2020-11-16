@@ -137,7 +137,7 @@ var symbols = [
     distanceIntervalMin: 0, // min pixel distance between two
     distanceIntervalMax: 200, // max pixel distance between two
     yMin: 200,
-    yMax: Y_FLOOR - 40,
+    yMax: Y_FLOOR - 40, // = 247.5
     zAtYMin: -600,
     zAtYMax: -20,
   },
@@ -564,6 +564,21 @@ var symbols = [
     ]
   },
   {
+    components: ["Board1km"],
+    distanceFirst: DISTANCE_FINISH_LINE - 1000*PIXELS_PER_METER,
+    // distanceIntervalMin: 2000, omitted: means no repetition
+    // distanceIntervalMax: 10000, omitted: means no repetition
+    yMin: 200,
+    yMax: 200,
+    // z: same as a rock at the same y position:
+    // align bottom of rock and bottom of board:
+    // y of the rock is then: 200 + 52(height of board) - 20(height of rock) = 232
+    // corresponding z of that rock is (see characteristics of "rocks in the background")
+    // -600 + (600 - 20) * (232 - 200)/(247.5 - 200)
+    zAtYMin: -600 + (600 - 20) * (232-200)/(Y_FLOOR - 40 - 200),
+    zAtYMax: -600 + (600 - 20) * (232-200)/(Y_FLOOR - 40 - 200),
+  },
+  {
     components: ["Friends"],
     distanceFirst: DISTANCE_FINISH_LINE, // first distance to appear in the world
     // distanceIntervalMin: 2000, omitted: means no repetition
@@ -765,6 +780,11 @@ var assetsObj = {
         "tile": 128,
         "tileh": 110,
         "map": { "Friends": [0,0]}
+      },
+      "board1km.png": {
+        "tile": 100,
+        "tileh": 52,
+        "map": { "Board1km": [0,0]}
       }
   },
 };
