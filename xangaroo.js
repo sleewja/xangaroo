@@ -1698,6 +1698,7 @@ function onHitOnParasol(aParasolEntity,aHitDatas){
   // attach parasol to kangaroo (above his head)
   aParasolEntity.x = kangarooEntity._x + 13;
   aParasolEntity.y = kangarooEntity._y -35;
+  aParasolEntity.z = kangarooEntity._z;
   // remove the Motion component since the parasol will now be attached to the kangaroo
   //aParasolEntity.removeComponent("Motion", false); // "false" means hard remove
   // the plan was to re-add this component later on, when we release the parasol.
