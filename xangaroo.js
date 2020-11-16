@@ -4,6 +4,7 @@
 
 var DEBUG = false; // display debug info
 
+var TARGET_FRAMES_PER_SECOND = 40; // default is 50
 var WORLD_WIDTH = 600;
 var WORLD_HEIGHT = Math.round((WORLD_WIDTH / 16) * 9);
 var FLOOR_HEIGHT = 50;
@@ -1268,7 +1269,7 @@ function createSymbol(aSymbol, aDistance){
     // the pattern defines the relative positions of repeated elements of the same kind
     pattern.forEach(function (subElement) {
       var entity = Crafty.e(
-        "2D, DOM, Canvas, Color, Motion, Collision, " +
+        "2D, DOM, Canvas, Color, Motion, " +
         aSymbol.components.join()
       )
         .attr({
@@ -1276,23 +1277,6 @@ function createSymbol(aSymbol, aDistance){
           y: yNewBorn + subElement.y,
           z: zNewBorn,
           vx: vxNewBorn,
-        })
-        .checkHits("Kangaroo")
-        .bind("HitOn", function (hitDatas) {
-          if (DEBUG&&0) {
-            console.log("Hit a ", aSymbol.components, " at distance ",Math.round(distance));
-          }
-          if ("onHitOn" in aSymbol) {
-            aSymbol.onHitOn(this,hitDatas);
-          }
-        })
-        .bind("HitOff", function (componentName) {
-          if (DEBUG && 0) {
-            console.log("Quit a ", componentName);
-          }
-          if ("onHitOff" in aSymbol) {
-            aSymbol.onHitOff(componentName); // the hitoff returns no hitData, only the componentName
-          }
         })
         .bind("Move", function (e) {
           // destroy the entity if it has moved too far away on the left or above,
@@ -1315,6 +1299,26 @@ function createSymbol(aSymbol, aDistance){
             }
           }
         }); // end of chained calls from Crafty.e()
+        // add collision component, only if onHitOn is defined (to reduce workload)
+        if ("onHitOn" in aSymbol){
+          entity.addComponent("Collision");
+          entity.checkHits("Kangaroo");
+          entity.bind("HitOn", function (hitDatas) {
+            if (DEBUG&&0) {
+              console.log("Hit a ", aSymbol.components, " at distance ",Math.round(distance));
+            }
+            aSymbol.onHitOn(this,hitDatas);
+          });
+          entity.bind("HitOff", function (componentName) {
+            if (DEBUG && 0) {
+              console.log("Quit a ", componentName);
+            }
+            if ("onHitOff" in aSymbol) {
+              aSymbol.onHitOff(componentName); // the hitoff returns no hitData, only the componentName
+            }
+          });
+        }
+        
         // if at this stage the width is 0, it means that no sprite
         // is available for this symbol; in that case make a 10x10 square
         if (entity.w == 0){
@@ -1323,10 +1327,13 @@ function createSymbol(aSymbol, aDistance){
           entity.color(aSymbol.color);
         } else {
           // most likely a sprite has been defined
-          // define the collision polygon
-          firstCustomComponent = aSymbol.components[0];
-          if (firstCustomComponent in spritePolygons){
-            entity.collision(spritePolygons[firstCustomComponent]);
+          // define the collision polygon, if the entity has Collision component,
+          // and if the custom component of the entity has a polygon defined
+          if (entity.has("Collision")){
+            firstCustomComponent = aSymbol.components[0];
+            if (firstCustomComponent in spritePolygons){
+              entity.collision(spritePolygons[firstCustomComponent]);
+            }
           }
         }
     });
@@ -2348,7 +2355,7 @@ Crafty.bind("UpdateFrame", function (eventData) {
   // update the distance
   distance += speed * (eventData.dt / 1000); // dt is in milliseconds
 
-  // update trace of Kangaroo, every 10 frames
+  // update trace of Kangaroo, every X frames
   if (eventData.frame % TRACE_FRAME_STEP == 0) {
     updateTraces();
   }
@@ -2370,6 +2377,7 @@ Crafty.bind("GameWon", function (eventData){
 
 
 Crafty.scene("main", function () {
+  Crafty.timer.FPS(TARGET_FRAMES_PER_SECOND);
   Crafty.viewport.scale(viewportScale);
   startTime = new Date().getTime();
   distance = 0;
