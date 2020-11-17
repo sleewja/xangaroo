@@ -77,6 +77,7 @@ var Z_ATTRIBUTES = 4; // attributes of kang, when in the air or worn by Kang: in
 var Z_ATTRIBUTES_LOST = 2; // attributes when lost on a cactus: behinf Kang
 var Z_OBSERVER = 100; // at Z_OBSERVER the visual speed is infinite
 var Z_PANEL = 1000; // in front, to hide objects behind
+var Z_GAME_OVER = Z_PANEL+1; // in front of panel
 
 // Characteristics of symbols hit actions
 var SCORPION_PAIN_SYMBOL_DURATION = 750; // milliseconds
@@ -993,21 +994,6 @@ function drawLeftPanel() {
     })
     .color("white");
 
-  // button for jump: whole canvas
-  Crafty.e("2D, Canvas, Mouse")
-    .attr({
-      x: 0,
-      y: 0,
-      w: CANVAS_WIDTH,
-      h: CANVAS_HEIGHT,
-    })
-    .bind("MouseDown", function (MouseEvent) {
-      Crafty("Kangaroo").onPlayerJumpRequest();
-    })
-    .bind("MouseUp", function (MouseEvent) {
-      Crafty("Kangaroo").onPlayerJumpStopRequest();
-    });
-
   // energy reserve
   energyBar = Crafty.e("2D, Canvas, Color")
     .attr({
@@ -1042,6 +1028,22 @@ function drawLeftPanel() {
       this.h = playerControlledEnergy;
       this.y = Y_FLOOR - this._h;
     });
+  
+  // button for jump: whole canvas
+  Crafty.e("2D, Canvas, Mouse")
+  .attr({
+    x: 0,
+    y: 0,
+    w: CANVAS_WIDTH,
+    h: CANVAS_HEIGHT,
+    z: Z_PANEL,
+  })
+  .bind("MouseDown", function (MouseEvent) {
+    Crafty("Kangaroo").onPlayerJumpRequest();
+  })
+  .bind("MouseUp", function (MouseEvent) {
+    Crafty("Kangaroo").onPlayerJumpStopRequest();
+  });
 }
 
 // draw footer (debug info, logo...)
@@ -1975,6 +1977,7 @@ function stopTheGame(aText,aColor){
       y: CANVAS_HEIGHT/4,
       w: CANVAS_WIDTH/3,
       h: CANVAS_HEIGHT/3,
+      z: Z_GAME_OVER,
     })
     .text(aText)
     .textColor(aColor)
