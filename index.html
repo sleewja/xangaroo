@@ -13,19 +13,46 @@
       comment="From https://github.com/craftyjs/Crafty/releases/download/0.9.0/crafty-min.js"
     </script>
     <script type="text/javascript">
+        var RESIZE_BY_CRAFTY = 1;    // resize by crafty viewport scaling
+        var RESIZE_BY_TRANSFORM = 2; // resize by CSS transform (faster I think?)
+        var resizeMode = RESIZE_BY_TRANSFORM;
+                
         // initial available dimensions, will be used in xangaroo.js to fit grid to window dimensions
         var available_width = document.body.clientWidth;
         var available_height = document.body.clientHeight;
 
         function onResize(){
-          // update available dimensions, used in xangaroo.js
+          // update available dimensions
           available_width = document.body.clientWidth;
           available_height = document.body.clientHeight;
-          // then call the resize function from xangaroo.js
-          resizeViewport();
+          if (resizeMode == RESIZE_BY_CRAFTY){
+            // call the resize function from xangaroo.js, using Crafty framework
+            resizeViewport();
+          } else {
+            // RESIZE_BY_TRANSFORM: resize by CSS transform
+            scaleFactor = calculateScalingFactor(available_width, available_height);
+            craftyStageDiv = document.getElementById("cr-stage");
+            craftyStageDiv.style['transform']='scale(' + scaleFactor +')';
+            craftyStageDiv.style['transform-origin']='top left';
+            // the width/height do not have to be adjusted explicitly, such that the two lines
+            // below are not needed (and are even giving bas results because it's like applying two
+            // times the scaling factor)
+            //craftyStageDiv.style['width'] = (Math.round(CANVAS_WIDTH*scaleFactor)).toString() + 'px';
+            //craftyStageDiv.style['height'] = (Math.round(CANVAS_HEIGHT*scaleFactor)).toString() + 'px';
+          
+            // For some reason the clickable areas must be explicitly resized (?)
+            jumpButton.w = available_width;
+            jumpButton.h = available_height;
+          }
         }
 
     </script>
     <script type="text/javascript" src="xangaroo.js" charset="utf-8"></script>
+    <script type="text/javascript">
+        // initially resize, after executing xangaroo.js (to define canvas dimensions)
+        if (resizeMode == RESIZE_BY_TRANSFORM){
+          onResize();
+        }    
+    </script>
   </body>
 </html>

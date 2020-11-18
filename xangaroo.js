@@ -104,6 +104,7 @@ var distance; // distance travelled in pixels
 var distanceLastPopulate; // distance last time populateWorld was called
 var distanceLastCactusHit; // distance of last cactus hit
 var traces = []; // array of arrays of entities: trace of kangaroo(s)
+var jumpButton; // make it globally visible (?)
 
 // ***********************************************
 // world inhabitants
@@ -812,7 +813,10 @@ var spritePolygons = {
   ),
 }
 
-var viewportScale = calculateScalingFactor(available_width, available_height);
+var viewportScale = 
+      (resizeMode == RESIZE_BY_CRAFTY)? 
+      calculateScalingFactor(available_width, available_height) :
+      1;
 Crafty.init(CANVAS_WIDTH * viewportScale, CANVAS_HEIGHT * viewportScale); // uses by default 'cr-stage' div
 
 
@@ -1030,12 +1034,12 @@ function drawLeftPanel() {
     });
   
   // button for jump: whole canvas
-  Crafty.e("2D, Canvas, Mouse")
+  jumpButton = Crafty.e("2D, Canvas, Mouse")
   .attr({
     x: 0,
     y: 0,
-    w: CANVAS_WIDTH,
-    h: CANVAS_HEIGHT,
+    w: available_width, //CANVAS_WIDTH,
+    h: available_height,//CANVAS_HEIGHT,
     z: Z_PANEL,
   })
   .bind("MouseDown", function (MouseEvent) {
@@ -1291,7 +1295,7 @@ function createSymbol(aSymbol, aDistance){
     // the pattern defines the relative positions of repeated elements of the same kind
     pattern.forEach(function (subElement) {
       var entity = Crafty.e(
-        "2D, DOM, Canvas, Color, Motion, " +
+        "2D, Canvas, Color, Motion, " +
         aSymbol.components.join()
       )
         .attr({
@@ -1970,7 +1974,7 @@ function onHitOnFriends(aFriendsEntity,aHitDatas){
  */
 function stopTheGame(aText,aColor){
   Crafty.pause();
-  // Show message, and restart on click on it or press space bar
+  // Show message, and restart on click or press space bar
   Crafty.e("2D, Canvas, Text, Mouse, Keyboard")
     .attr({
       x: CANVAS_WIDTH/4,
@@ -1981,7 +1985,17 @@ function stopTheGame(aText,aColor){
     })
     .text(aText)
     .textColor(aColor)
-    .textFont({size: '60px', weight: 'bold'}) 
+    .textFont({size: '60px', weight: 'bold'});
+  
+  // button taking the entire available area
+  Crafty.e("2D, Canvas, Mouse")
+    .attr({
+      x: 0,
+      y: 0,
+      w: available_width, //CANVAS_WIDTH,
+      h: available_height,//CANVAS_HEIGHT,
+      z: Z_PANEL,
+    })
     .bind("MouseDown", function (MouseEvent) {
       // restart the game, and unpause
       Crafty.pause();
@@ -2401,7 +2415,9 @@ Crafty.bind("GameWon", function (eventData){
 
 Crafty.scene("main", function () {
   Crafty.timer.FPS(TARGET_FRAMES_PER_SECOND);
-  Crafty.viewport.scale(viewportScale);
+  if (resizeMode == RESIZE_BY_CRAFTY) { 
+    Crafty.viewport.scale(viewportScale);
+  }
   startTime = new Date().getTime();
   distance = 0;
   distanceLastPopulate = distance;
