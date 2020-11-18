@@ -2,7 +2,7 @@
 // global variables
 // ***********************************************
 
-var DEBUG = false; // display debug info
+var DEBUG = false; // display debug info + activate deug control (ex right arrow to accelerate)
 
 var TARGET_FRAMES_PER_SECOND = 40; // default is 50
 var WORLD_WIDTH = 600;
@@ -399,6 +399,11 @@ var symbols = [
     yMax: Y_FLOOR - 80,
     zAtYMin: 0, // in front of symbols
     zAtYMax: 0,
+    onHitOn: function (aEntity,hitDatas) {
+      // do nothing when Kangaroo hits a Goal;
+      // But we define the onHitOn function: trick to add the Collision
+      // component to Goal, and use the collision polygon.
+    },
   },
   {
     components: ["Chilli"],
