@@ -50,11 +50,11 @@ var GRAVITY_RATIO_DEFAULT = 5; // shape of the jump: gravity multiplication fact
 var GRAVITY_MAX = 1000;
 var GRAVITY_FAST_FALL = 500;
 var TRACE_FRAME_STEP = 2; // number of frames between each trace update
-var TRACE_MAX_COUNT = 100; // max number of traces to remember
+var TRACE_MAX_COUNT = 50; // max number of traces to remember
 var TRACE_SIZE = 2; // size of trace blocks
 var POPULATE_WORLD_DISTANCE_STEP = 10; // pixel distance between two calls of populateWorld
 var PRE_POPULATE_DURATION = 60000; // milliseconds simulated in the past to prepopulate the world
-var DELAY_TO_DISAPPEAR = 5000; // milliseconds: delay to destroy a symbol after exiting the world on the left side, if z=0. if z<0: the delay will be longer
+var DELAY_TO_DISAPPEAR = 200; // milliseconds: delay to destroy a symbol after exiting the world on the left side, if z=0. if z<0: the delay will be longer
 var Y_DISAPPEAR_TOP = -100; // y position too far above: symbol is destroyed
 var Y_DISAPPEAR_BOTTOM = WORLD_HEIGHT + 100; // y too far below: symbol must be destroyed
 var MESSAGE_Z_RANDOMNESS_PERCENT = 10; // +/- randomness on z for messages, to prevent from horizontal lines to be too obviously visible
@@ -878,7 +878,7 @@ function drawWorld() {
       y: Y_FLOOR,
       // keep a bit of margin to hold the balls, but not too much otherwise we keep
       // shooting on the same balls over and over again
-      w: CANVAS_WIDTH + 2*extensionLength,
+      w: CANVAS_WIDTH + 4*extensionLength,
       h: FLOOR_HEIGHT,
       z: Z_BACKGROUND,
     })
@@ -1312,7 +1312,7 @@ function createSymbol(aSymbol, aDistance){
         .bind("Move", function (e) {
           // destroy the entity if it has moved too far away on the left or above,
           // and it is not attached to the kangaroo
-          if (isTooFarOutOfWorld(this._x, this.vx, this._y)) {
+          if (isTooFarOutOfWorld(this._x + this._w, this.vx, this._y)) {
             isAttachedToKangaroo = false;
             if ( this._parent){ // check first presence of a parent (returns NULL if absent)
               if (this._parent.has("Kangaroo")){
@@ -1501,7 +1501,7 @@ function createMessage(aSymbol, aDistance){
         .color(aSymbol.color)
         .bind("Move", function (e) {
           // destroy the entity if it has moved too far away on the left border
-          if (isTooFarOutOfWorld(this._x, this.vx, this._y)) {
+          if (isTooFarOutOfWorld(this._x + this._w, this.vx, this._y)) {
             if (DEBUG && 0) {
               console.log(
                 "destroy a " + aSymbol.components + " at x = ",
