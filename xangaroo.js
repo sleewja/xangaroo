@@ -111,6 +111,18 @@ var jumpButton; // make it globally visible (?)
 // ***********************************************
 var symbols = [
   {
+    components: ["Banner"],
+    distanceFirst: -CANVAS_WIDTH/4,
+    // distanceIntervalMin: 2000, omitted: means no repetition
+    // distanceIntervalMax: 10000, omitted: means no repetition
+    yMin: 25,
+    yMax: 25,
+    zAtYMin: -50,
+    zAtYMax: -50,
+    speedMin: -20, // speed of the symbol in pixel/second. <0 means go leftwards
+    speedMax: -20,
+  },
+  {
     components: ["Cloud"],
     color: COLOR_CLOUD,
     // distanceFirst : 0,  if omitted: means that it will be pre-populated
@@ -792,6 +804,11 @@ var assetsObj = {
         "tile": 100,
         "tileh": 52,
         "map": { "Board1km": [0,0]}
+      },
+      "banner.png": {
+        "tile": 481,
+        "tileh": 29,
+        "map": { "Banner": [0,0]}
       }
   },
 };
