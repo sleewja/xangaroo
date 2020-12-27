@@ -902,8 +902,8 @@ function resizeMouseAreas(){
   jumpButton.w = scaleFactor * CANVAS_WIDTH;
   jumpButton.h = scaleFactor * CANVAS_HEIGHT;
 
-  pauseButton.x = scaleFactor * (LEFT_MARGIN/5);
-  pauseButton.y = scaleFactor * (WORLD_HEIGHT - 35);
+  pauseButton.x = scaleFactor * (CANVAS_WIDTH - 35);
+  pauseButton.y = scaleFactor * (CANVAS_HEIGHT - 35);
   pauseButton.w = scaleFactor * 30;
   pauseButton.h = scaleFactor * 30;
 }
@@ -1102,14 +1102,14 @@ function drawLeftPanel() {
   // This is why we separate the image from the clickable area.
   pauseButtonImage = Crafty.e("2D, Canvas, PauseButton")
   .attr({
-    x: LEFT_MARGIN/5,
-    y: WORLD_HEIGHT - 35,
+    x: CANVAS_WIDTH - 35,
+    y: CANVAS_HEIGHT - 35,
     z: Z_PAUSE_BUTTON,
   });
   pauseButton = Crafty.e("2D, Canvas, Mouse, PauseButton")
   .attr({
-    x: LEFT_MARGIN/5,
-    y: WORLD_HEIGHT - 35,
+    x: CANVAS_WIDTH - 35,
+    y: CANVAS_HEIGHT - 35,
     w: 30,
     h: 30,
     z: Z_PAUSE_BUTTON,
