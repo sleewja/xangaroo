@@ -77,7 +77,8 @@ var Z_ATTRIBUTES = 4; // attributes of kang, when in the air or worn by Kang: in
 var Z_ATTRIBUTES_LOST = 2; // attributes when lost on a cactus: behinf Kang
 var Z_OBSERVER = 100; // at Z_OBSERVER the visual speed is infinite
 var Z_PANEL = 1000; // in front, to hide objects behind
-var Z_GAME_OVER = Z_PANEL+1; // in front of panel
+var Z_PAUSE_BUTTON = Z_PANEL+1; // in front of panel
+var Z_GAME_OVER = Z_PANEL+2; // in front of pause button
 
 // Characteristics of symbols hit actions
 var SCORPION_PAIN_SYMBOL_DURATION = 750; // milliseconds
@@ -893,6 +894,20 @@ function resizeViewport(){
   Crafty.viewport.scale(viewportScale);
 }
 
+// resize mouse areas based on scaling factor
+// This is needed after a CSS Scale transform
+function resizeMouseAreas(){
+  scaleFactor = calculateScalingFactor(available_width, available_height);
+
+  jumpButton.w = scaleFactor * CANVAS_WIDTH;
+  jumpButton.h = scaleFactor * CANVAS_HEIGHT;
+
+  pauseButton.x = scaleFactor * (LEFT_MARGIN/5);
+  pauseButton.y = scaleFactor * (WORLD_HEIGHT - 35);
+  pauseButton.w = scaleFactor * 30;
+  pauseButton.h = scaleFactor * 30;
+}
+
 
 // draw initial world
 function drawWorld() {
@@ -1071,8 +1086,8 @@ function drawLeftPanel() {
   .attr({
     x: 0,
     y: 0,
-    w: resizeMode == RESIZE_BY_CRAFTY ? CANVAS_WIDTH : available_width,
-    h: resizeMode == RESIZE_BY_CRAFTY ? CANVAS_HEIGHT : available_height,
+    w: CANVAS_WIDTH,
+    h: CANVAS_HEIGHT,
     z: Z_PANEL,
   })
   .bind("MouseDown", function (MouseEvent) {
@@ -1083,13 +1098,21 @@ function drawLeftPanel() {
   });
 
   // pause/play button
+  // image is rescaled by CSS scale transform, but the mouse area not.
+  // This is why we separate the image from the clickable area.
+  pauseButtonImage = Crafty.e("2D, Canvas, PauseButton")
+  .attr({
+    x: LEFT_MARGIN/5,
+    y: WORLD_HEIGHT - 35,
+    z: Z_PAUSE_BUTTON,
+  });
   pauseButton = Crafty.e("2D, Canvas, Mouse, PauseButton")
   .attr({
     x: LEFT_MARGIN/5,
     y: WORLD_HEIGHT - 35,
     w: 30,
     h: 30,
-    z: Z_PANEL,
+    z: Z_PAUSE_BUTTON,
   })
   .bind("Click", function (MouseEvent) {
     // ignore pause if distance is zero; this occurs when the pause button is
@@ -2464,7 +2487,7 @@ Crafty.bind("GameWon", function (eventData){
 });
 
 Crafty.bind("GamePaused", function (eventData){
-  pauseButton.toggleComponent("PauseButton, PlayButton");
+  pauseButtonImage.toggleComponent("PauseButton, PlayButton");
   // Force a redraw of the pause button after toggle
   // Without this call, the impage of the button is not refreshed when pausing
   Crafty.trigger("RenderScene");
@@ -2484,6 +2507,9 @@ Crafty.scene("main", function () {
   drawWorld();
   drawLeftPanel();
   drawFooter();
+  if (resizeMode == RESIZE_BY_TRANSFORM) { 
+    resizeMouseAreas();
+  }
 });
 
 

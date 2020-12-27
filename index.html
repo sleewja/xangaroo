@@ -15,7 +15,7 @@
     <script type="text/javascript">
         var RESIZE_BY_CRAFTY = 1;    // resize by crafty viewport scaling
         var RESIZE_BY_TRANSFORM = 2; // resize by CSS transform (faster I think?, but does not resize the mouse buttons)
-        var resizeMode = RESIZE_BY_CRAFTY;
+        var resizeMode = RESIZE_BY_TRANSFORM;
                 
         // initial available dimensions, will be used in xangaroo.js to fit grid to window dimensions
         var available_width = document.body.clientWidth;
@@ -35,24 +35,23 @@
             craftyStageDiv.style['transform']='scale(' + scaleFactor +')';
             craftyStageDiv.style['transform-origin']='top left';
             // the width/height do not have to be adjusted explicitly, such that the two lines
-            // below are not needed (and are even giving bas results because it's like applying two
+            // below are not needed (and are even giving bad results because it's like applying two
             // times the scaling factor)
             //craftyStageDiv.style['width'] = (Math.round(CANVAS_WIDTH*scaleFactor)).toString() + 'px';
             //craftyStageDiv.style['height'] = (Math.round(CANVAS_HEIGHT*scaleFactor)).toString() + 'px';
           
             // For some reason the clickable areas must be explicitly resized (?)
-            jumpButton.w = available_width;
-            jumpButton.h = available_height;
+            resizeMouseAreas(scaleFactor);
           }
         }
 
     </script>
     <script type="text/javascript" src="xangaroo.js" charset="utf-8"></script>
     <script type="text/javascript">
-        // initially resize, after executing xangaroo.js (to define canvas dimensions)
-        if (resizeMode == RESIZE_BY_TRANSFORM){
-          onResize();
-        }    
-    </script>
+      // initially resize, after executing xangaroo.js (to define canvas dimensions)
+      if (resizeMode == RESIZE_BY_TRANSFORM){
+        onResize();
+      }    
+  </script>
   </body>
 </html>
