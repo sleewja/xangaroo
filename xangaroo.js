@@ -104,7 +104,8 @@ var distance; // distance travelled in pixels
 var distanceLastPopulate; // distance last time populateWorld was called
 var distanceLastCactusHit; // distance of last cactus hit
 var traces = []; // array of arrays of entities: trace of kangaroo(s)
-var jumpButton; // make it globally visible (?)
+var jumpButton; // make it globally visible
+var pauseButton; // make it globally visible
 
 // ***********************************************
 // world inhabitants
@@ -809,6 +810,16 @@ var assetsObj = {
         "tile": 481,
         "tileh": 29,
         "map": { "Banner": [0,0]}
+      },
+      "pause.png": {
+        "tile": 30,
+        "tileh": 30,
+        "map": { "PauseButton": [0,0]}
+      },
+      "play.png": {
+        "tile": 30,
+        "tileh": 30,
+        "map": { "PlayButton": [0,0]}
       }
   },
 };
@@ -895,7 +906,7 @@ function drawWorld() {
       y: Y_FLOOR,
       // keep a bit of margin to hold the balls, but not too much otherwise we keep
       // shooting on the same balls over and over again
-      w: CANVAS_WIDTH + 4*extensionLength,
+      w: WORLD_WIDTH + 4*extensionLength,
       h: FLOOR_HEIGHT,
       z: Z_BACKGROUND,
     })
@@ -906,7 +917,7 @@ function drawWorld() {
     .attr({
       x: LEFT_MARGIN,
       y: Y_HORIZON,
-      w: CANVAS_WIDTH,
+      w: WORLD_WIDTH,
       h: BUSH_HEIGHT+2, // little overlap with floor to avoid white line wometimes after resizing
       z: Z_BACKGROUND,
     })
@@ -917,7 +928,7 @@ function drawWorld() {
     .attr({
       x: LEFT_MARGIN,
       y: 0,
-      w: CANVAS_WIDTH,
+      w: WORLD_WIDTH,
       h: Y_HORIZON - 0,
       z: Z_BACKGROUND,
     })
@@ -928,7 +939,7 @@ function drawWorld() {
     .attr({
       x: LEFT_MARGIN,
       y: Y_STRATOSPHERE-50,
-      w: CANVAS_WIDTH,
+      w: WORLD_WIDTH,
       h: 50,
       z: Z_BACKGROUND,
     })
@@ -1060,8 +1071,8 @@ function drawLeftPanel() {
   .attr({
     x: 0,
     y: 0,
-    w: available_width, //CANVAS_WIDTH,
-    h: available_height,//CANVAS_HEIGHT,
+    w: resizeMode == RESIZE_BY_CRAFTY ? CANVAS_WIDTH : available_width,
+    h: resizeMode == RESIZE_BY_CRAFTY ? CANVAS_HEIGHT : available_height,
     z: Z_PANEL,
   })
   .bind("MouseDown", function (MouseEvent) {
@@ -1070,6 +1081,24 @@ function drawLeftPanel() {
   .bind("MouseUp", function (MouseEvent) {
     Crafty("Kangaroo").onPlayerJumpStopRequest();
   });
+
+  // pause/play button
+  pauseButton = Crafty.e("2D, Canvas, Mouse, PauseButton")
+  .attr({
+    x: LEFT_MARGIN/5,
+    y: WORLD_HEIGHT - 35,
+    w: 30,
+    h: 30,
+    z: Z_PANEL,
+  })
+  .bind("Click", function (MouseEvent) {
+    // ignore pause if distance is zero; this occurs when the pause button is
+    // pressed in the "Game Over" screen
+    if (distance > 10) {
+      Crafty.trigger("GamePaused",0);
+    }
+  });
+
 }
 
 // draw footer (debug info, logo...)
@@ -1995,7 +2024,7 @@ function onHitOnFriends(aFriendsEntity,aHitDatas){
  * @param {*} aColor 
  */
 function stopTheGame(aText,aColor){
-  Crafty.pause();
+  Crafty.trigger("GamePaused",0);
   // Show message, and restart on click or press space bar
   Crafty.e("2D, Canvas, Text, Mouse, Keyboard")
     .attr({
@@ -2016,17 +2045,17 @@ function stopTheGame(aText,aColor){
       y: 0,
       w: available_width, //CANVAS_WIDTH,
       h: available_height,//CANVAS_HEIGHT,
-      z: Z_PANEL,
+      z: Z_GAME_OVER,
     })
     .bind("MouseDown", function (MouseEvent) {
       // restart the game, and unpause
-      Crafty.pause();
+      Crafty.trigger("GamePaused");
       Crafty.scene("main");
     })
     .bind("KeyDown", function (e){
       if (e.key == Crafty.keys.SPACE){
         // restart the game, and unpause
-        Crafty.pause();
+        Crafty.trigger("GamePaused");
         Crafty.scene("main");
       }
     });
@@ -2434,6 +2463,13 @@ Crafty.bind("GameWon", function (eventData){
   stopTheGame("TROP FORT", "chocolate");
 });
 
+Crafty.bind("GamePaused", function (eventData){
+  pauseButton.toggleComponent("PauseButton, PlayButton");
+  // Force a redraw of the pause button after toggle
+  // Without this call, the impage of the button is not refreshed when pausing
+  Crafty.trigger("RenderScene");
+  Crafty.pause();
+});
 
 Crafty.scene("main", function () {
   Crafty.timer.FPS(TARGET_FRAMES_PER_SECOND);
