@@ -483,7 +483,7 @@ var symbols = [
     zAtYMin: Z_ATTRIBUTES, // in front of kangaroo
     zAtYMax: Z_ATTRIBUTES, // in front of kangaroo
     onHitOn: function (aEntity,hitDatas) {
-      onHitOnAttribute(aEntity,hitDatas,this.components[0],33,-6);
+      onHitOnAttribute(aEntity,hitDatas,this.components[0],25,-9);
     },
     patterns : [
       [ // single
@@ -502,7 +502,7 @@ var symbols = [
     zAtYMin: Z_ATTRIBUTES, // in front of kangaroo
     zAtYMax: Z_ATTRIBUTES, // in front of kangaroo
     onHitOn: function (aEntity,hitDatas) {
-      onHitOnAttribute(aEntity,hitDatas,this.components[0],37,4);
+      onHitOnAttribute(aEntity,hitDatas,this.components[0],36,2);
     },
     patterns : [
       [ // single
@@ -521,7 +521,7 @@ var symbols = [
     zAtYMin: Z_ATTRIBUTES, // in front of kangaroo
     zAtYMax: Z_ATTRIBUTES, // in front of kangaroo
     onHitOn: function (aEntity,hitDatas) {
-      onHitOnAttribute(aEntity,hitDatas,this.components[0],18,2);
+      onHitOnAttribute(aEntity,hitDatas,this.components[0],38,10);
     },
     patterns : [
       [ // single
@@ -540,7 +540,7 @@ var symbols = [
     zAtYMin: Z_ATTRIBUTES, // in front of kangaroo
     zAtYMax: Z_ATTRIBUTES, // in front of kangaroo
     onHitOn: function (aEntity,hitDatas) {
-      onHitOnAttribute(aEntity,hitDatas,this.components[0],17,10);
+      onHitOnAttribute(aEntity,hitDatas,this.components[0],11,3);
     },
     patterns : [
       [ // single
@@ -612,7 +612,7 @@ var symbols = [
   },
   {
     components: ["Message"],
-    color: COLOR_MESSAGE,
+    color: "crimson",
     distanceFirst: 25000, // 1st distance where the message is aligned
     distanceIntervalMin: 3000, // if this key is absent: it means the symbol appears only once
     distanceIntervalMax: 3000, // if this key is absent: it means the symbol appears only once
@@ -624,11 +624,11 @@ var symbols = [
     zBottom: -500,
     message: [
       // ASCII art: http://patorjk.com/software/taag/#p=display&v=1&f=Bright&t=BON%20ANNIVERSAIRE
-      " #####    ####   ##  ##           ####   ##  ##  ##  ##  ######  ##  ##  ######  #####    ####    ####   ######  #####   ###### ",
-      " ##  ##  ##  ##  ### ##          ##  ##  ### ##  ### ##    ##    ##  ##  ##      ##  ##  ##      ##  ##    ##    ##  ##  ##     ",
-      " #####   ##  ##  ## ###          ######  ## ###  ## ###    ##    ##  ##  ####    #####    ####   ######    ##    #####   ####   ",
-      " ##  ##  ##  ##  ##  ##          ##  ##  ##  ##  ##  ##    ##     ####   ##      ##  ##      ##  ##  ##    ##    ##  ##  ##     ",
-      " #####    ####   ##  ##          ##  ##  ##  ##  ##  ##  ######    ##    ######  ##  ##   ####   ##  ##  ######  ##  ##  ###### ",
+      " #####    ####   ##  ##  ##  ##  ######      ####   ##  ##  ##  ##  ######  ######       ####    ####    ####     ##         ## ",
+      " ##  ##  ##  ##  ### ##  ### ##  ##         ##  ##  ### ##  ### ##  ##      ##              ##  ##  ##      ##   ###         ## ",
+      " #####   ##  ##  ## ###  ## ###  ####       ######  ## ###  ## ###  ####    ####         ####   ######   ####     ##         ## ",
+      " ##  ##  ##  ##  ##  ##  ##  ##  ##         ##  ##  ##  ##  ##  ##  ##      ##          ##      ##  ##  ##        ##            ",
+      " #####    ####   ##  ##  ##  ##  ######     ##  ##  ##  ##  ##  ##  ######  ######      ######   ####   ######  ######       ## ",
     ],
   },
   {
@@ -773,23 +773,23 @@ var assetsObj = {
         "map": { "HamburgerBubble": [0,0]}
       },
       "cowboyhat.png": {
-        "tile": 28,
-        "tileh": 13,
+        "tile": 23,
+        "tileh": 16,
         "map": { "CowBoyHat": [0,0]}
       },
       "sunglasses.png": {
-        "tile": 12,
-        "tileh": 7,
+        "tile": 16,
+        "tileh": 10,
         "map": { "Sunglasses": [0,0]}
       },
       "sweater.png": {
-        "tile": 25,
-        "tileh": 19,
+        "tile": 12,
+        "tileh": 12,
         "map": { "Sweater": [0,0]}
       },
       "short.png": {
-        "tile": 17,
-        "tileh": 15,
+        "tile": 33,
+        "tileh": 25,
         "map": { "Short": [0,0]}
       },
       "boot.png": {
