@@ -521,7 +521,7 @@ var symbols = [
     zAtYMin: Z_ATTRIBUTES, // in front of kangaroo
     zAtYMax: Z_ATTRIBUTES, // in front of kangaroo
     onHitOn: function (aEntity,hitDatas) {
-      onHitOnAttribute(aEntity,hitDatas,this.components[0],38,10);
+      onHitOnAttribute(aEntity,hitDatas,this.components[0],37,12);
     },
     patterns : [
       [ // single
