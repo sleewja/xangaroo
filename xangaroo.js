@@ -604,8 +604,8 @@ var symbols = [
     distanceFirst: DISTANCE_FINISH_LINE, // first distance to appear in the world
     // distanceIntervalMin: 2000, omitted: means no repetition
     // distanceIntervalMax: 10000, omitted: means no repetition
-    yMin: Y_FLOOR - 110,
-    yMax: Y_FLOOR - 110,
+    yMin: Y_FLOOR - 140,
+    yMax: Y_FLOOR - 140,
     onHitOn: function (aEntity,hitDatas) {
       onHitOnFriends(aEntity,hitDatas);
     },
@@ -798,8 +798,8 @@ var assetsObj = {
         "map": { "Boot": [0,0]}
       },
       "friends.png": {
-        "tile": 128,
-        "tileh": 110,
+        "tile": 152,
+        "tileh": 140,
         "map": { "Friends": [0,0]}
       },
       "board1km.png": {
