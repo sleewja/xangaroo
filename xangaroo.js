@@ -836,9 +836,12 @@ var spritePolygons = {
   Cloud: new Crafty.polygon(
     15,7, 37,7, 37,21, 15,21
   ),
-  Rock: new Crafty.polygon(
+  // Do not define a collision polygon for Rock, because otherwise it
+  // generates too much workload with the big arch with many rocks, and
+  // this generates performance issues: sometimes it slows down a bit. 
+  /*Rock: new Crafty.polygon(
     0,7, 5,0, 15,0, 19,8, 19,18, 0,18
-  ),
+  ),*/
   Goal: new Crafty.polygon(
     10,10, 40,10, 40,20, 10,20
   ),
